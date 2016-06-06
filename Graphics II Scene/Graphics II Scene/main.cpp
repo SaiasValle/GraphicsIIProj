@@ -15,17 +15,11 @@
 #include "Camera.h"
 #include "XTime.h"
 
-// BEGIN PART 1
-// TODO: PART 1 STEP 1a
-#pragma comment(lib,"d3d11.lib")
-#include <d3d11.h>
 
 // TODO: PART 2 STEP 6
 #include "Trivial_VS.csh"
 #include "Trivial_PS.csh"
 
-#define BACKBUFFER_WIDTH	500
-#define BACKBUFFER_HEIGHT	500
 #define RELEASE(point) { if(point) { point->Release(); point = nullptr; } }
 #define CHECK(HR) { assert(HR == S_OK); }
 
@@ -46,31 +40,42 @@ class DEMO_APP
 	ID3D11InputLayout *input		= nullptr;
 	ID3D11Texture2D *image			= nullptr;
 	IDXGISwapChain *swapchain		= nullptr;
-	ID3D11Buffer *vertBuff			= nullptr;
 	D3D11_VIEWPORT viewport;
 	DXGI_SWAP_CHAIN_DESC swapDesc;
-	XTime clock;
 
+	// Other
+	XTime clock;
+	Camera camera;
+	Scene scene;
+	Object star;
+	Object ground;
 
 	// Shaders
 	ID3D11VertexShader *VertShader	= nullptr;
 	ID3D11PixelShader *PixelShader	= nullptr;
 	
-	// Buffers
-	ID3D11Buffer *buffer = nullptr;
-	D3D11_BUFFER_DESC buffDesc;
+	// Star Buffers
+	ID3D11Buffer *starVBuff			= nullptr;
+	ID3D11Buffer *Starbuffer		= nullptr;
+	D3D11_BUFFER_DESC StarbuffDesc;
+	// Index buffer
+	ID3D11Buffer *StarIndexbuff;
+	D3D11_BUFFER_DESC StarIbuffDesc;
 
+	// Ground Buffers
+	ID3D11Buffer *GroundVBuff		= nullptr;
+	ID3D11Buffer *Groundbuff		= nullptr;
+	D3D11_BUFFER_DESC GndbuffDesc;
+	// Index buffer
+	ID3D11Buffer *GndIndexbuff;
+	D3D11_BUFFER_DESC GndIbuffDesc;
+
+	// Constant buffer
 	ID3D11Buffer *Cbuffer;
 	D3D11_BUFFER_DESC CbuffDesc;
-	// Object Buffer
-	ID3D11Buffer *Objbuffer;
-	D3D11_BUFFER_DESC ObjbuffDesc;
 	// Scene buffer
-	ID3D11Buffer *Sbuffer;
-	D3D11_BUFFER_DESC SbuffDesc;
-	// Index buffer
-	ID3D11Buffer *Ibuffer;
-	D3D11_BUFFER_DESC IbuffDesc;
+	ID3D11Buffer *Scenebuff;
+	D3D11_BUFFER_DESC ScnebuffDesc;
 	// Z buffer
 	ID3D11Texture2D *Zbuffer;
 	D3D11_TEXTURE2D_DESC ZbuffDesc;
@@ -85,36 +90,29 @@ class DEMO_APP
 	// TODO: PART 3 STEP 4a
 	SEND_TO_VRAM toShader;
 
-	struct Scene
-	{
-		XMFLOAT4X4 ViewMatrix;
-		XMFLOAT4X4 ProjectMatrix;
-	};
-	struct Object
-	{
-		XMFLOAT4X4 WorldMatrix;
-	};
-
-	Scene scene;
-	Object obj;
-
 public:
 	struct SIMPLE_VERTEX
 	{
 		float x, y, z, w;
 		float color[4];
 	};
-	SIMPLE_VERTEX star[12];
-	unsigned int numVerts = 12;
+	SIMPLE_VERTEX starverts[12];
+	SIMPLE_VERTEX groundverts[8];
 
 	DEMO_APP(HINSTANCE hinst, WNDPROC proc);
 	bool Run();
 	bool ShutDown();
 	void Resize(int width, int height);
 	void SetProjectionMatrix();
-	void SetObjMatrix(float Time);
-
+	// Star/Ground
+	void SetStarMat(float Time);
 	void CreateStar();
+	void CreateGround();
+	// Set Buffers
+	void SetBuffers();
+	void CreateObjBuffs(ID3D11Buffer *vertbuff, SIMPLE_VERTEX verts[], unsigned int indices[], unsigned int numverts);
+	// Sets Swapchain & Creates Viewport
+	void SetSwapChain();
 };
 
 //************************************************************
@@ -149,40 +147,8 @@ DEMO_APP::DEMO_APP(HINSTANCE hinst, WNDPROC proc)
     ShowWindow( window, SW_SHOW );
 	//********************* END WARNING ************************//
 	
-	// TODO: PART 1 STEP 3a
-	ZeroMemory(&swapDesc, sizeof(swapDesc));
-	swapDesc.BufferDesc.Width = BACKBUFFER_WIDTH;
-	swapDesc.BufferDesc.Height = BACKBUFFER_HEIGHT;
-	swapDesc.BufferDesc.RefreshRate.Numerator = 60;
-	swapDesc.BufferDesc.RefreshRate.Denominator = 1;
-	swapDesc.BufferCount = 1;
-	swapDesc.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-	swapDesc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
-	swapDesc.OutputWindow = window;
-	swapDesc.Windowed = true;
-	swapDesc.SampleDesc.Count = 1;
-	swapDesc.SampleDesc.Quality = 0;
-	swapDesc.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
-	swapDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-
-	// TODO: PART 1 STEP 3b
-	HRESULT hr = (D3D11CreateDeviceAndSwapChain(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, D3D11_CREATE_DEVICE_DEBUG, 0, 0, D3D11_SDK_VERSION, &swapDesc, &swapchain, &device, nullptr, &devContext));
-	
-	// TODO: PART 1 STEP 4
-	swapchain->GetBuffer(0, __uuidof(ID3D11Texture2D), (LPVOID*)&image);
-	device->CreateRenderTargetView(image, nullptr, &RTV);
-	image->Release();
-
-	// TODO: PART 1 STEP 5
-	ZeroMemory(&viewport, sizeof(D3D11_VIEWPORT));
-	// Setting Dimensions of the view
-	viewport.TopLeftX = 0;
-	viewport.TopLeftY = 0;
-	viewport.Width = BACKBUFFER_WIDTH;
-	viewport.Height = BACKBUFFER_HEIGHT;
-	viewport.MinDepth = 0;
-	viewport.MaxDepth = 1;
-
+	// ViewPort & SwapChain
+	SetSwapChain();
 	// Creating Star
 #if 1
 	unsigned int starindeces[60] =
@@ -207,58 +173,43 @@ DEMO_APP::DEMO_APP(HINSTANCE hinst, WNDPROC proc)
 	11, 10, 9,
 	11, 1, 10 };
 	CreateStar();
+	CreateGround();
 #endif
 
-    // TODO: PART 2 STEP 3c
+	// TODO: PART 2 STEP 3c
 	D3D11_SUBRESOURCE_DATA data;
 	ZeroMemory(&data, sizeof(data));
-	data.pSysMem = star;
+	data.pSysMem = starverts;
 	data.SysMemPitch = NULL;
 	data.SysMemSlicePitch = NULL;
 
-	// Vert buffer
-	D3D11_BUFFER_DESC vertbuffDesc;
-	ZeroMemory(&vertbuffDesc, sizeof(vertbuffDesc));
-	vertbuffDesc.ByteWidth = sizeof(SIMPLE_VERTEX) * numVerts;
-	vertbuffDesc.Usage = D3D11_USAGE_DEFAULT;
-	vertbuffDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
-	vertbuffDesc.CPUAccessFlags = D3D11_USAGE_DEFAULT;
-	vertbuffDesc.StructureByteStride = 0;
+	// Vertex buffer
+	D3D11_BUFFER_DESC ObjbuffDesc;
+	ZeroMemory(&ObjbuffDesc, sizeof(ObjbuffDesc));
+	ObjbuffDesc.ByteWidth = sizeof(SIMPLE_VERTEX) * ARRAYSIZE(starverts);
+	ObjbuffDesc.Usage = D3D11_USAGE_DEFAULT;
+	ObjbuffDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+	ObjbuffDesc.CPUAccessFlags = D3D11_USAGE_DEFAULT;
+	ObjbuffDesc.StructureByteStride = 0;
 
-	CHECK(device->CreateBuffer(&vertbuffDesc, &data, &vertBuff));
+	CHECK(device->CreateBuffer(&ObjbuffDesc, &data, &starVBuff));
 
 	// Index buffer
 	data.pSysMem = starindeces;
-	ZeroMemory(&IbuffDesc, sizeof(IbuffDesc));
-	IbuffDesc.BindFlags = D3D11_BIND_INDEX_BUFFER;
-	IbuffDesc.ByteWidth = sizeof(starindeces);
-	IbuffDesc.CPUAccessFlags = NULL;
-	IbuffDesc.Usage = D3D11_USAGE_IMMUTABLE;
+	ZeroMemory(&StarIbuffDesc, sizeof(StarIbuffDesc));
+	StarIbuffDesc.BindFlags = D3D11_BIND_INDEX_BUFFER;
+	StarIbuffDesc.ByteWidth = sizeof(starindeces);
+	StarIbuffDesc.CPUAccessFlags = NULL;
+	StarIbuffDesc.Usage = D3D11_USAGE_IMMUTABLE;
 
-	CHECK(device->CreateBuffer(&IbuffDesc, &data, &Ibuffer));
+	CHECK(device->CreateBuffer(&StarIbuffDesc, &data, &StarIndexbuff));
 
-	// Z buffer
-	ZeroMemory(&ZbuffDesc, sizeof(ZbuffDesc));
-	ZbuffDesc.BindFlags = D3D11_BIND_DEPTH_STENCIL;
-	ZbuffDesc.Format = DXGI_FORMAT_D32_FLOAT;
-	ZbuffDesc.Width = BACKBUFFER_WIDTH;
-	ZbuffDesc.Height = BACKBUFFER_HEIGHT;
-	ZbuffDesc.MipLevels = 1;
-	ZbuffDesc.ArraySize = 1;
-	ZbuffDesc.Usage = D3D11_USAGE_DEFAULT;
-	ZbuffDesc.SampleDesc.Count = 1;
-	ZbuffDesc.SampleDesc.Quality = 0;
-	data.pSysMem = Zbuffer;
-	data.SysMemPitch = NULL;
-	data.SysMemSlicePitch = NULL;
+	// Object Vertex Buffers
+	//CreateObjBuffs(starVBuff, starverts, starindeces, ARRAYSIZE(starverts));
 
-	CHECK(device->CreateTexture2D(&ZbuffDesc, 0, &Zbuffer));
-	CHECK(device->CreateDepthStencilView(Zbuffer, nullptr, &DSV));
-	
-	// TODO: PART 5 STEP 2b
-	
-	// TODO: PART 5 STEP 3
-		
+	// Set Buffers (Index, Constant, etc.)
+	SetBuffers();
+
 	// TODO: PART 2 STEP 5
 	// ADD SHADERS TO PROJECT, SET BUILD OPTIONS & COMPILE
 
@@ -276,32 +227,7 @@ DEMO_APP::DEMO_APP(HINSTANCE hinst, WNDPROC proc)
 	// TODO: PART 2 STEP 8b
 	CHECK(device->CreateInputLayout(vertLayout, ARRAYSIZE(vertLayout), Trivial_VS, sizeof(Trivial_VS), &input));
 	
-	// Constant Buffer
-	ZeroMemory(&CbuffDesc, sizeof(CbuffDesc));
-	CbuffDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-	CbuffDesc.Usage = D3D11_USAGE_DYNAMIC;
-	CbuffDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-	CbuffDesc.ByteWidth = sizeof(SEND_TO_VRAM);
 
-	CHECK(device->CreateBuffer(&CbuffDesc, nullptr, &Cbuffer));
-
-	// Object buffer (World)
-	ZeroMemory(&ObjbuffDesc, sizeof(ObjbuffDesc));
-	ObjbuffDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-	ObjbuffDesc.Usage = D3D11_USAGE_DYNAMIC;
-	ObjbuffDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-	ObjbuffDesc.ByteWidth = sizeof(Object);
-
-	CHECK(device->CreateBuffer(&ObjbuffDesc, nullptr, &Objbuffer));
-
-	// Scene Buffer (View/Projection)
-	ZeroMemory(&SbuffDesc, sizeof(SbuffDesc));
-	SbuffDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-	SbuffDesc.Usage = D3D11_USAGE_DYNAMIC;
-	SbuffDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-	SbuffDesc.ByteWidth = sizeof(Scene);
-
-	CHECK(device->CreateBuffer(&SbuffDesc, nullptr, &Sbuffer));
 
 	// TODO: PART 3 STEP 4b
 	toShader.constantOffset[0] = 0;
@@ -315,7 +241,7 @@ DEMO_APP::DEMO_APP(HINSTANCE hinst, WNDPROC proc)
 	// Set Projection Matrix
 	SetProjectionMatrix();
 	XMStoreFloat4x4(&scene.ViewMatrix, XMMatrixIdentity());
-	//scene.ViewMatrix = Translation(Vertex(0, 0, 5, 1));
+	XMStoreFloat4x4(&scene.ViewMatrix, XMMatrixTranslation(0.0f, 0.0f, 5.0f));
 }
 
 //************************************************************
@@ -325,13 +251,14 @@ DEMO_APP::DEMO_APP(HINSTANCE hinst, WNDPROC proc)
 bool DEMO_APP::Run()
 {
 	float time = (float)clock.TotalTime();
-	// Set World Matrix	
-	SetObjMatrix(time);
-	// TODO: PART 4 STEP 3
-	
-	// TODO: PART 4 STEP 5
-	
-	// END PART 4
+	// Set Star Matrix	
+	SetStarMat(time);
+
+	// Camera Movement
+	camera.SetCameraMat(scene.ViewMatrix);
+	camera.MoveCamera();
+	camera.RotateCamera();
+	scene.ViewMatrix = camera.GetCameraMat();
 
 	// TODO: PART 1 STEP 7a
 	devContext->OMSetRenderTargets(1, &RTV, DSV);
@@ -340,19 +267,9 @@ bool DEMO_APP::Run()
 	devContext->RSSetViewports(1, &viewport);
 	
 	// TODO: PART 1 STEP 7c
-	float color[4] = { 0.0f, 0.125f, 0.6f, 1.0f };
+	float color[4] = { 0.1f, 0.1f, 0.1f, 1.0f };
 	devContext->ClearDepthStencilView(DSV, D3D11_CLEAR_DEPTH, 1, 0);
 	devContext->ClearRenderTargetView(RTV, color);
-
-	// TODO: PART 5 STEP 4
-	
-	// TODO: PART 5 STEP 5
-	
-	// TODO: PART 5 STEP 6
-	
-	// TODO: PART 5 STEP 7
-	
-	// END PART 5
 	
 	// Constant
 	unsigned int size = sizeof(SEND_TO_VRAM);
@@ -363,35 +280,48 @@ bool DEMO_APP::Run()
 	devContext->Unmap(Cbuffer, 0);
 	devContext->VSSetConstantBuffers(0, 1, &Cbuffer);
 
-	// Object (world)
+	// Object (Star)
 	size = sizeof(Object);
-	devContext->Map(Objbuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &map);
-	memcpy(map.pData, &obj, size);
-	devContext->Unmap(Objbuffer, 0);
-	devContext->VSSetConstantBuffers(1, 1, &Objbuffer);
+	devContext->Map(Starbuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &map);
+	memcpy(map.pData, &star, size);
+	devContext->Unmap(Starbuffer, 0);
+	devContext->VSSetConstantBuffers(1, 1, &Starbuffer);
 
 	// Scene
 	size = sizeof(Scene);
-	devContext->Map(Sbuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &map);
+	devContext->Map(Scenebuff, 0, D3D11_MAP_WRITE_DISCARD, 0, &map);
 	memcpy(map.pData, &scene, size);
-	devContext->Unmap(Sbuffer, 0);
-	devContext->VSSetConstantBuffers(2, 1, &Sbuffer);
+	devContext->Unmap(Scenebuff, 0);
+	devContext->VSSetConstantBuffers(2, 1, &Scenebuff);
 
-	// Bindings
+	// Star Bindings
 	size = sizeof(SIMPLE_VERTEX);
-	devContext->IASetVertexBuffers(0, 1, &vertBuff, &size, &offset);
-	devContext->IASetIndexBuffer(Ibuffer, DXGI_FORMAT_R32_UINT, 0);
+	devContext->IASetVertexBuffers(0, 1, &starVBuff, &size, &offset);
+	devContext->IASetIndexBuffer(StarIndexbuff, DXGI_FORMAT_R32_UINT, 0);
 
 	// Shaders
 	devContext->VSSetShader(VertShader, nullptr, 0);
 	devContext->PSSetShader(PixelShader, nullptr, 0);
 
-	// Other stuff
+	// Topology
 	devContext->IASetInputLayout(input);
 	devContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-	// Draw
+	// Draw Star
 	devContext->DrawIndexed(60, 0, 0);
+
+	// Object (Ground)
+	size = sizeof(Object);
+	devContext->Map(Groundbuff, 0, D3D11_MAP_WRITE_DISCARD, 0, &map);
+	memcpy(map.pData, &ground, size);
+	devContext->Unmap(Groundbuff, 0);
+	devContext->VSSetConstantBuffers(1, 1, &Groundbuff);
+	// Ground Bindings
+	size = sizeof(SIMPLE_VERTEX);
+	devContext->IASetVertexBuffers(0, 1, &GroundVBuff, &size, &offset);
+	devContext->IASetIndexBuffer(GndIndexbuff, DXGI_FORMAT_R32_UINT, 0);
+	// Draw Ground
+	devContext->DrawIndexed(36, 0, 0);
 
 	// TODO: PART 1 STEP 8
 	swapchain->Present(0, 0);
@@ -421,13 +351,15 @@ bool DEMO_APP::ShutDown()
 	RELEASE(input);
 	RELEASE(swapchain);
 	RELEASE(image);
-	RELEASE(vertBuff);
-	RELEASE(buffer);
 	RELEASE(Cbuffer);
-	RELEASE(Ibuffer);
-	RELEASE(Sbuffer);
-	RELEASE(Objbuffer);
+	RELEASE(Scenebuff);
 	RELEASE(Zbuffer)
+	RELEASE(StarIndexbuff);
+	RELEASE(Starbuffer);
+	RELEASE(starVBuff);
+	RELEASE(GndIndexbuff);
+	RELEASE(Groundbuff);
+	RELEASE(GroundVBuff);
 
 	UnregisterClass( L"DirectXApplication", application ); 
 	return true;
@@ -470,6 +402,43 @@ LRESULT CALLBACK WndProc( HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam 
     return DefWindowProc( hWnd, message, wParam, lParam );
 }
 //********************* END WARNING ************************//
+
+void DEMO_APP::SetSwapChain()
+{
+	// TODO: PART 1 STEP 3a
+	ZeroMemory(&swapDesc, sizeof(swapDesc));
+	swapDesc.BufferDesc.Width = BACKBUFFER_WIDTH;
+	swapDesc.BufferDesc.Height = BACKBUFFER_HEIGHT;
+	swapDesc.BufferDesc.RefreshRate.Numerator = 60;
+	swapDesc.BufferDesc.RefreshRate.Denominator = 1;
+	swapDesc.BufferCount = 1;
+	swapDesc.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	swapDesc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
+	swapDesc.OutputWindow = window;
+	swapDesc.Windowed = true;
+	swapDesc.SampleDesc.Count = 1;
+	swapDesc.SampleDesc.Quality = 0;
+	swapDesc.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
+	swapDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+
+	// TODO: PART 1 STEP 3b
+	HRESULT hr = (D3D11CreateDeviceAndSwapChain(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, D3D11_CREATE_DEVICE_DEBUG, 0, 0, D3D11_SDK_VERSION, &swapDesc, &swapchain, &device, nullptr, &devContext));
+
+	// TODO: PART 1 STEP 4
+	swapchain->GetBuffer(0, __uuidof(ID3D11Texture2D), (LPVOID*)&image);
+	device->CreateRenderTargetView(image, nullptr, &RTV);
+	image->Release();
+
+	// TODO: PART 1 STEP 5
+	ZeroMemory(&viewport, sizeof(D3D11_VIEWPORT));
+	// Setting Dimensions of the view
+	viewport.TopLeftX = 0;
+	viewport.TopLeftY = 0;
+	viewport.Width = BACKBUFFER_WIDTH;
+	viewport.Height = BACKBUFFER_HEIGHT;
+	viewport.MinDepth = 0;
+	viewport.MaxDepth = 1;
+}
 void DEMO_APP::SetProjectionMatrix()
 {
 	float zNear = 0.1f;
@@ -485,30 +454,11 @@ void DEMO_APP::SetProjectionMatrix()
 	scene.ProjectMatrix._43 = -(zFar * zNear) / (zFar - zNear);
 	scene.ProjectMatrix._44 = 0.0f;
 }
-void DEMO_APP::SetObjMatrix(float Time)
+void DEMO_APP::SetStarMat(float Time)
 {
-	// Row 1
-	obj.WorldMatrix._11 = cos(Time);
-	obj.WorldMatrix._12 = 0;
-	obj.WorldMatrix._13 = sin(Time);
-	obj.WorldMatrix._14 = 0;
-	// Row 2
-	obj.WorldMatrix._21 = 0;
-	obj.WorldMatrix._22 = 1;
-	obj.WorldMatrix._23 = 0;
-	obj.WorldMatrix._24 = 0;
-	// Row 3
-	obj.WorldMatrix._31 = -sin(Time);
-	obj.WorldMatrix._32 = 0;
-	obj.WorldMatrix._33 = cos(Time);
-	obj.WorldMatrix._34 = 0;
-	// Row 4
-	obj.WorldMatrix._41 = 0;
-	obj.WorldMatrix._42 = 0;
-	obj.WorldMatrix._43 = 5;
-	obj.WorldMatrix._44 = 1;
+	XMStoreFloat4x4(&star.WorldMatrix, XMMatrixIdentity());
+	XMStoreFloat4x4(&star.WorldMatrix, XMMatrixRotationY(Time));
 }
-
 void DEMO_APP::CreateStar()
 {
 	// TODO: PART 2 STEP 3a
@@ -516,41 +466,227 @@ void DEMO_APP::CreateStar()
 	for (int i = 0; i < 360; i += 36)
 	{
 		// Position
-		star[index].x = (float)cosf(i * 0.01745277777777777777777777777778f);
-		star[index].y = (float)sinf(i * 0.01745277777777777777777777777778f);
-		star[index].z = 0;
-		star[index].w = 1.0f;
+		starverts[index].x = (float)cosf(i * 0.01745277777777777777777777777778f);
+		starverts[index].y = (float)sinf(i * 0.01745277777777777777777777777778f);
+		starverts[index].z = 0;
+		starverts[index].w = 1.0f;
 		// Color
-		star[index].color[0] = 0.0f;
-		star[index].color[1] = 0.4f;
-		star[index].color[2] = 0.6f;
-		star[index].color[3] = 1.0f;
+		starverts[index].color[0] = 0.0f;
+		starverts[index].color[1] = 0.0f;
+		starverts[index].color[2] = 0.0f;
+		starverts[index].color[3] = 1.0f;
 		// Inner Vertices
 		if (index % 2 == 0)
 		{
-			star[index].x /= 2;
-			star[index].y /= 2;
-			star[index].color[0] = 0.0;
-			star[index].color[1] = 0.0;
-			star[index].color[2] = 0.0;
-			star[index].color[3] = 1.0;
+			starverts[index].x /= 2;
+			starverts[index].y /= 2;
+			starverts[index].color[0] = 0.0f;
+			starverts[index].color[1] = 0.0f;
+			starverts[index].color[2] = 0.0f;
+			starverts[index].color[3] = 1.0f;
 		}
 		++index;
 	}
-	star[0].x = 0.0f;
-	star[0].y = 0.0f;
-	star[0].z = 0.5f;
-	star[0].w = 1.0f;
-	star[11].x = 0.0f;
-	star[11].y = 0.0f;
-	star[11].z = -0.5f;
-	star[11].w = 1.0f;
-	star[0].color[0] = 0.0;
-	star[0].color[1] = 0.0;
-	star[0].color[2] = 0.0;
-	star[0].color[3] = 1.0;
-	star[11].color[0] = 0.0;
-	star[11].color[1] = 0.0;
-	star[11].color[2] = 0.0;
-	star[11].color[3] = 1.0;
+	starverts[0].x = 0.0f;
+	starverts[0].y = 0.0f;
+	starverts[0].z = 0.4f;
+	starverts[0].w = 1.0f;
+	starverts[11].x = 0.0f;
+	starverts[11].y = 0.0f;
+	starverts[11].z = -0.4f;
+	starverts[11].w = 1.0f;
+	starverts[0].color[0] = 1.0f;
+	starverts[0].color[1] = 1.0f;
+	starverts[0].color[2] = 0.0f;
+	starverts[0].color[3] = 1.0f;
+	starverts[11].color[0] = 1.0f;
+	starverts[11].color[1] = 1.0f;
+	starverts[11].color[2] = 0.0f;
+	starverts[11].color[3] = 1.0f;
+}
+void DEMO_APP::CreateGround()
+{
+	// Ground Matrix
+	XMStoreFloat4x4(&ground.WorldMatrix, XMMatrixIdentity());
+
+	// Top Face
+	groundverts[0].x = -16.0f;
+	groundverts[0].y = -2.0f;
+	groundverts[0].z = -16.0f;
+	groundverts[0].w = 1.0f;
+
+	groundverts[1].x = -16.0f;
+	groundverts[1].y = -2.0f;
+	groundverts[1].z = 16.0f;
+	groundverts[1].w = 1.0f;
+
+	groundverts[2].x = 16.0f;
+	groundverts[2].y = -2.0f;
+	groundverts[2].z = 16.0f;
+	groundverts[2].w = 1.0f;
+
+	groundverts[3].x = 16.0f;
+	groundverts[3].y = -2.0f;
+	groundverts[3].z = -16.0f;
+	groundverts[3].w = 1.0f;
+
+	// Bottom Face
+	groundverts[4].x = -16.0f;
+	groundverts[4].y = -3.0f;
+	groundverts[4].z = -16.0f;
+	groundverts[4].w = 1.0f;
+
+	groundverts[5].x = -16.0f;
+	groundverts[5].y = -3.0f;
+	groundverts[5].z = 16.0f;
+	groundverts[5].w = 1.0f;
+
+	groundverts[6].x = 16.0f;
+	groundverts[6].y = -3.0f;
+	groundverts[6].z = 16.0f;
+	groundverts[6].w = 1.0f;
+
+	groundverts[7].x = 16.0f;
+	groundverts[7].y = -3.0f;
+	groundverts[7].z = -16.0f;
+	groundverts[7].w = 1.0f;
+
+	// Colors
+	for (unsigned int i = 0; i < 4; i++)
+	{
+		for (unsigned int j = 0; j < 4; j++)
+		{
+			groundverts[i].color[j] = 0.6f;
+			groundverts[i+4].color[j] = 0.2f;
+		}
+	}
+
+	unsigned int indeces[] =
+	{ 0, 1, 2,
+	0, 2, 3,
+	6, 5, 4,
+	7, 6, 4,
+
+	4, 1, 0,
+	5, 4, 1,
+
+	6, 2, 1,
+	5, 6, 1,
+
+	6, 7, 2,
+	7, 3, 2,
+
+	3, 7, 0,
+	7, 4, 0};
+
+	// TODO: PART 2 STEP 3c
+	D3D11_SUBRESOURCE_DATA data;
+	ZeroMemory(&data, sizeof(data));
+	data.pSysMem = groundverts;
+	data.SysMemPitch = NULL;
+	data.SysMemSlicePitch = NULL;
+
+	// Vertex buffer
+	D3D11_BUFFER_DESC GndbuffDesc;
+	ZeroMemory(&GndbuffDesc, sizeof(GndbuffDesc));
+	GndbuffDesc.ByteWidth = sizeof(SIMPLE_VERTEX) * ARRAYSIZE(groundverts);
+	GndbuffDesc.Usage = D3D11_USAGE_DEFAULT;
+	GndbuffDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+	GndbuffDesc.CPUAccessFlags = D3D11_USAGE_DEFAULT;
+	GndbuffDesc.StructureByteStride = 0;
+
+	CHECK(device->CreateBuffer(&GndbuffDesc, &data, &GroundVBuff));
+
+	// Index buffer
+	data.pSysMem = indeces;
+	ZeroMemory(&GndIbuffDesc, sizeof(GndIbuffDesc));
+	GndIbuffDesc.BindFlags = D3D11_BIND_INDEX_BUFFER;
+	GndIbuffDesc.ByteWidth = sizeof(indeces);
+	GndIbuffDesc.CPUAccessFlags = NULL;
+	GndIbuffDesc.Usage = D3D11_USAGE_IMMUTABLE;
+
+	CHECK(device->CreateBuffer(&GndIbuffDesc, &data, &GndIndexbuff));
+}
+void DEMO_APP::SetBuffers()
+{
+	// Constant Buffer
+	ZeroMemory(&CbuffDesc, sizeof(CbuffDesc));
+	CbuffDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+	CbuffDesc.Usage = D3D11_USAGE_DYNAMIC;
+	CbuffDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+	CbuffDesc.ByteWidth = sizeof(SEND_TO_VRAM);
+
+	CHECK(device->CreateBuffer(&CbuffDesc, nullptr, &Cbuffer));
+
+	// Star Buffer
+	ZeroMemory(&StarbuffDesc, sizeof(StarbuffDesc));
+	StarbuffDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+	StarbuffDesc.Usage = D3D11_USAGE_DYNAMIC;
+	StarbuffDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+	StarbuffDesc.ByteWidth = sizeof(Object);
+
+	CHECK(device->CreateBuffer(&StarbuffDesc, nullptr, &Starbuffer));
+	
+	// Ground Buffer
+	ZeroMemory(&GndbuffDesc, sizeof(GndbuffDesc));
+	GndbuffDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+	GndbuffDesc.Usage = D3D11_USAGE_DYNAMIC;
+	GndbuffDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+	GndbuffDesc.ByteWidth = sizeof(Object);
+
+	CHECK(device->CreateBuffer(&GndbuffDesc, nullptr, &Groundbuff));
+
+	// Scene Buffer (View/Projection)
+	ZeroMemory(&ScnebuffDesc, sizeof(ScnebuffDesc));
+	ScnebuffDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+	ScnebuffDesc.Usage = D3D11_USAGE_DYNAMIC;
+	ScnebuffDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+	ScnebuffDesc.ByteWidth = sizeof(Scene);
+
+	CHECK(device->CreateBuffer(&ScnebuffDesc, nullptr, &Scenebuff));
+
+	// Z buffer
+	ZeroMemory(&ZbuffDesc, sizeof(ZbuffDesc));
+	ZbuffDesc.BindFlags = D3D11_BIND_DEPTH_STENCIL;
+	ZbuffDesc.Format = DXGI_FORMAT_D32_FLOAT;
+	ZbuffDesc.Width = BACKBUFFER_WIDTH;
+	ZbuffDesc.Height = BACKBUFFER_HEIGHT;
+	ZbuffDesc.MipLevels = 1;
+	ZbuffDesc.ArraySize = 1;
+	ZbuffDesc.Usage = D3D11_USAGE_DEFAULT;
+	ZbuffDesc.SampleDesc.Count = 1;
+	ZbuffDesc.SampleDesc.Quality = 0;
+
+	CHECK(device->CreateTexture2D(&ZbuffDesc, 0, &Zbuffer));
+	CHECK(device->CreateDepthStencilView(Zbuffer, nullptr, &DSV));
+}
+void DEMO_APP::CreateObjBuffs(ID3D11Buffer *vertbuff, SIMPLE_VERTEX verts[], unsigned int indices[], unsigned int numverts)
+{
+	// TODO: PART 2 STEP 3c
+	D3D11_SUBRESOURCE_DATA data;
+	ZeroMemory(&data, sizeof(data));
+	data.pSysMem = verts;
+	data.SysMemPitch = NULL;
+	data.SysMemSlicePitch = NULL;
+
+	// Vertex buffer
+	D3D11_BUFFER_DESC ObjbuffDesc;
+	ZeroMemory(&ObjbuffDesc, sizeof(ObjbuffDesc));
+	ObjbuffDesc.ByteWidth = sizeof(SIMPLE_VERTEX) * numverts;
+	ObjbuffDesc.Usage = D3D11_USAGE_DEFAULT;
+	ObjbuffDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+	ObjbuffDesc.CPUAccessFlags = D3D11_USAGE_DEFAULT;
+	ObjbuffDesc.StructureByteStride = 0;
+
+	CHECK(device->CreateBuffer(&ObjbuffDesc, &data, &vertbuff));
+
+	// Index buffer
+	data.pSysMem = indices;
+	ZeroMemory(&StarIbuffDesc, sizeof(StarIbuffDesc));
+	StarIbuffDesc.BindFlags = D3D11_BIND_INDEX_BUFFER;
+	StarIbuffDesc.ByteWidth = sizeof(indices);
+	StarIbuffDesc.CPUAccessFlags = NULL;
+	StarIbuffDesc.Usage = D3D11_USAGE_IMMUTABLE;
+	
+	CHECK(device->CreateBuffer(&StarIbuffDesc, &data, &StarIndexbuff));
 }
