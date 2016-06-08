@@ -110,7 +110,10 @@ public:
 	void CreateGround();
 	// Set Buffers
 	void SetBuffers();
-	void CreateObjBuffs(ID3D11Buffer *vertbuff, SIMPLE_VERTEX verts[], unsigned int indices[], unsigned int numverts);
+	template <typename Type>
+	void SetVertBuffer(ID3D11Buffer *vertbuff, vector<Type> verts);
+	template <typename Type>
+	void SetIndexBuffer(ID3D11Buffer *vertbuff, vector<Type> verts);
 	// Sets Swapchain & Creates Viewport
 	void SetSwapChain();
 };
@@ -204,7 +207,7 @@ DEMO_APP::DEMO_APP(HINSTANCE hinst, WNDPROC proc)
 
 	CHECK(device->CreateBuffer(&StarIbuffDesc, &data, &StarIndexbuff));
 
-	// Object Vertex Buffers
+	// Vertex Buffers
 	//CreateObjBuffs(starVBuff, starverts, starindeces, ARRAYSIZE(starverts));
 
 	// Set Buffers (Index, Constant, etc.)
@@ -660,7 +663,9 @@ void DEMO_APP::SetBuffers()
 	CHECK(device->CreateTexture2D(&ZbuffDesc, 0, &Zbuffer));
 	CHECK(device->CreateDepthStencilView(Zbuffer, nullptr, &DSV));
 }
-void DEMO_APP::CreateObjBuffs(ID3D11Buffer *vertbuff, SIMPLE_VERTEX verts[], unsigned int indices[], unsigned int numverts)
+
+template<typename Type>
+void DEMO_APP<Type>::SetVertBuffer(ID3D11Buffer *vertbuff, vector<Type> verts)
 {
 	// TODO: PART 2 STEP 3c
 	D3D11_SUBRESOURCE_DATA data;
@@ -687,6 +692,6 @@ void DEMO_APP::CreateObjBuffs(ID3D11Buffer *vertbuff, SIMPLE_VERTEX verts[], uns
 	StarIbuffDesc.ByteWidth = sizeof(indices);
 	StarIbuffDesc.CPUAccessFlags = NULL;
 	StarIbuffDesc.Usage = D3D11_USAGE_IMMUTABLE;
-	
+
 	CHECK(device->CreateBuffer(&StarIbuffDesc, &data, &StarIndexbuff));
 }

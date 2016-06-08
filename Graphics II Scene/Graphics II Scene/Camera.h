@@ -17,6 +17,7 @@ using namespace DirectX;
 
 #define BACKBUFFER_WIDTH	500
 #define BACKBUFFER_HEIGHT	500
+#define MOUSE_LOOK_SPEED_MODIFIER 0.0025f
 
 // Camera Control class
 class Camera
