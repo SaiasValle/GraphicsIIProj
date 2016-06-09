@@ -22,7 +22,7 @@ using namespace DirectX;
 // Camera Control class
 class Camera
 {
-	// m_CameraMat
+private:
 	// 4x4 Matrix representing camera position and orientation in worldspace
 	XMFLOAT4X4	m_CameraMat;
 

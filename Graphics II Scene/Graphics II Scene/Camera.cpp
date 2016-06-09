@@ -57,10 +57,6 @@ void Camera::MoveCamera()
 void Camera::RotateCamera()
 {
 	POINT mousePos;
-	XMFLOAT4X4 camera_mat = m_CameraMat;
-	XMFLOAT4X4 newcamera_mat;
-	XMFLOAT3 xaxis, yaxis, zaxis;
-	XMFLOAT3 normX, normY, normZ;
 
 	int x = (BACKBUFFER_WIDTH / 2), y = (BACKBUFFER_HEIGHT / 2);
 	GetCursorPos(&mousePos);
@@ -69,8 +65,12 @@ void Camera::RotateCamera()
 	
 	if (GetAsyncKeyState(VK_RBUTTON))
 	{
-#if 0
-  
+#if 1
+		XMMATRIX camera_mat = XMLoadFloat4x4(&m_CameraMat);
+		XMFLOAT3 xaxis(1, 0, 0);
+		XMFLOAT3 yaxis(0, 1, 0);
+		XMFLOAT3 zaxis(0, 0, 1);
+
 		// Up & Down
 		XMMATRIX rotate = XMMatrixRotationX(mouseDiff[1] * 0.0003f);
 		camera_mat = XMMatrixMultiply(camera_mat, rotate);
@@ -79,28 +79,34 @@ void Camera::RotateCamera()
 		rotate = XMMatrixRotationY(mouseDiff[0] * 0.0003f);
 		camera_mat = XMMatrixMultiply(camera_mat, rotate);
 
-		// Rebuild Matrix
-		newcamera_mat = camera_mat;
-		// Z-axis
-		zaxis = camera_mat.r[3];
-		newcamera_mat.r[3] = zaxis;
-		newcamera_mat.r[3] = XMVector3Normalize(zaxis);
-		// Temp Y-axis
-		yaxis = { 0, 1, 0 };
-		// X-axis
-		xaxis = XMVector3Cross(yaxis, zaxis);
-		newcamera_mat.r[0] = xaxis;
-		newcamera_mat.r[0] = XMVector3Normalize(xaxis);
-		// Real Y-axis
-		yaxis = XMVector3Cross(zaxis, xaxis);
-		newcamera_mat.r[2] = yaxis;
-		newcamera_mat.r[2] = XMVector3Normalize(yaxis);
+		//// Rebuild Matrix
+		//newcamera_mat = camera_mat;
+		//// Z-axis
+		//zaxis = camera_mat.r[3];
+		//newcamera_mat.r[3] = zaxis;
+		//newcamera_mat.r[3] = XMVector3Normalize(zaxis);
+		//// Temp Y-axis
+		//yaxis = { 0, 1, 0 };
+		//// X-axis
+		//xaxis = XMVector3Cross(yaxis, zaxis);
+		//newcamera_mat.r[0] = xaxis;
+		//newcamera_mat.r[0] = XMVector3Normalize(xaxis);
+		//// Real Y-axis
+		//yaxis = XMVector3Cross(zaxis, xaxis);
+		//newcamera_mat.r[2] = yaxis;
+		//newcamera_mat.r[2] = XMVector3Normalize(yaxis);
 
-		XMStoreFloat4x4(&m_CameraMat, newcamera_mat);
+		XMStoreFloat4x4(&m_CameraMat, camera_mat);
+		//zaxis = XMVector3Cross()
 	}
 #endif
 
-#if 1
+#if 0
+	XMFLOAT4X4 camera_mat = m_CameraMat;
+	XMFLOAT4X4 newcamera_mat;
+	XMFLOAT3 xaxis, yaxis, zaxis;
+	XMFLOAT3 normX, normY, normZ;
+
 	// Up & Down
 	XMMATRIX rotate = XMMatrixRotationX(mouseDiff[1] * 0.0003f);
 	XMStoreFloat4x4(&camera_mat, XMMatrixMultiply(XMLoadFloat4x4(&camera_mat), rotate));

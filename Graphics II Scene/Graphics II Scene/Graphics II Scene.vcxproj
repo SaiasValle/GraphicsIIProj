@@ -79,11 +79,13 @@
     <ClCompile Include="Camera.cpp" />
     <ClCompile Include="DDSTextureLoader.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="Skybox.cpp" />
     <ClCompile Include="XTime.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Camera.h" />
     <ClInclude Include="DDSTextureLoader.h" />
+    <ClInclude Include="Skybox.h" />
     <ClInclude Include="XTime.h" />
   </ItemGroup>
   <ItemGroup>
@@ -91,6 +93,10 @@
     <None Include="Trivial_VS.csh" />
   </ItemGroup>
   <ItemGroup>
+    <FxCompile Include="Skybox_VS_Shader.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Vertex</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Vertex</ShaderType>
+    </FxCompile>
     <FxCompile Include="Trivial_VS.hlsl" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

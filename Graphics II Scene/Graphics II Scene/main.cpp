@@ -56,29 +56,20 @@ class DEMO_APP
 	
 	// Star Buffers
 	ID3D11Buffer *starVBuff			= nullptr;
-	ID3D11Buffer *Starbuffer		= nullptr;
-	D3D11_BUFFER_DESC StarbuffDesc;
-	// Index buffer
+	ID3D11Buffer *StarCbuffer		= nullptr;
 	ID3D11Buffer *StarIndexbuff;
-	D3D11_BUFFER_DESC StarIbuffDesc;
 
 	// Ground Buffers
 	ID3D11Buffer *GroundVBuff		= nullptr;
 	ID3D11Buffer *Groundbuff		= nullptr;
-	D3D11_BUFFER_DESC GndbuffDesc;
-	// Index buffer
 	ID3D11Buffer *GndIndexbuff;
-	D3D11_BUFFER_DESC GndIbuffDesc;
 
 	// Constant buffer
 	ID3D11Buffer *Cbuffer;
-	D3D11_BUFFER_DESC CbuffDesc;
 	// Scene buffer
 	ID3D11Buffer *Scenebuff;
-	D3D11_BUFFER_DESC ScnebuffDesc;
 	// Z buffer
 	ID3D11Texture2D *Zbuffer;
-	D3D11_TEXTURE2D_DESC ZbuffDesc;
 
 	// TODO: PART 3 STEP 2b
 	struct SEND_TO_VRAM
@@ -96,8 +87,8 @@ public:
 		float x, y, z, w;
 		float color[4];
 	};
-	SIMPLE_VERTEX starverts[12];
-	SIMPLE_VERTEX groundverts[8];
+	vector<SIMPLE_VERTEX> starverts;
+	vector<SIMPLE_VERTEX> groundverts;
 
 	DEMO_APP(HINSTANCE hinst, WNDPROC proc);
 	bool Run();
@@ -111,9 +102,9 @@ public:
 	// Set Buffers
 	void SetBuffers();
 	template <typename Type>
-	void SetVertBuffer(ID3D11Buffer *vertbuff, vector<Type> verts);
+	void SetVertBuffer(ID3D11Buffer **vertbuff, vector<Type> verts);
 	template <typename Type>
-	void SetIndexBuffer(ID3D11Buffer *vertbuff, vector<Type> verts);
+	void SetIndexBuffer(ID3D11Buffer **vertbuff, vector<Type> verts);
 	// Sets Swapchain & Creates Viewport
 	void SetSwapChain();
 };
@@ -154,7 +145,7 @@ DEMO_APP::DEMO_APP(HINSTANCE hinst, WNDPROC proc)
 	SetSwapChain();
 	// Creating Star
 #if 1
-	unsigned int starindeces[60] =
+	vector<unsigned int> starindeces =
 	{ 0, 1, 2,
 	0, 2, 3,
 	0, 3, 4,
@@ -180,36 +171,37 @@ DEMO_APP::DEMO_APP(HINSTANCE hinst, WNDPROC proc)
 #endif
 
 	// TODO: PART 2 STEP 3c
-	D3D11_SUBRESOURCE_DATA data;
-	ZeroMemory(&data, sizeof(data));
-	data.pSysMem = starverts;
-	data.SysMemPitch = NULL;
-	data.SysMemSlicePitch = NULL;
-
-	// Vertex buffer
-	D3D11_BUFFER_DESC ObjbuffDesc;
-	ZeroMemory(&ObjbuffDesc, sizeof(ObjbuffDesc));
-	ObjbuffDesc.ByteWidth = sizeof(SIMPLE_VERTEX) * ARRAYSIZE(starverts);
-	ObjbuffDesc.Usage = D3D11_USAGE_DEFAULT;
-	ObjbuffDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
-	ObjbuffDesc.CPUAccessFlags = D3D11_USAGE_DEFAULT;
-	ObjbuffDesc.StructureByteStride = 0;
-
-	CHECK(device->CreateBuffer(&ObjbuffDesc, &data, &starVBuff));
-
-	// Index buffer
-	data.pSysMem = starindeces;
-	ZeroMemory(&StarIbuffDesc, sizeof(StarIbuffDesc));
-	StarIbuffDesc.BindFlags = D3D11_BIND_INDEX_BUFFER;
-	StarIbuffDesc.ByteWidth = sizeof(starindeces);
-	StarIbuffDesc.CPUAccessFlags = NULL;
-	StarIbuffDesc.Usage = D3D11_USAGE_IMMUTABLE;
-
-	CHECK(device->CreateBuffer(&StarIbuffDesc, &data, &StarIndexbuff));
+	//D3D11_SUBRESOURCE_DATA data;
+	//ZeroMemory(&data, sizeof(data));
+	//data.pSysMem = &starverts;
+	//data.SysMemPitch = NULL;
+	//data.SysMemSlicePitch = NULL;
+	//
+	//// Vertex buffer
+	//D3D11_BUFFER_DESC ObjbuffDesc;
+	//ZeroMemory(&ObjbuffDesc, sizeof(ObjbuffDesc));
+	//ObjbuffDesc.ByteWidth = sizeof(SIMPLE_VERTEX) * starverts.size();
+	//ObjbuffDesc.Usage = D3D11_USAGE_DEFAULT;
+	//ObjbuffDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+	//ObjbuffDesc.CPUAccessFlags = D3D11_USAGE_DEFAULT;
+	//ObjbuffDesc.StructureByteStride = 0;
+	//
+	//CHECK(device->CreateBuffer(&ObjbuffDesc, &data, &starVBuff));
+	//
+	//// Index buffer
+	//data.pSysMem = &starindeces;
+	//ZeroMemory(&StarIbuffDesc, sizeof(StarIbuffDesc));
+	//StarIbuffDesc.BindFlags = D3D11_BIND_INDEX_BUFFER;
+	//StarIbuffDesc.ByteWidth = sizeof(starindeces);
+	//StarIbuffDesc.CPUAccessFlags = NULL;
+	//StarIbuffDesc.Usage = D3D11_USAGE_IMMUTABLE;
+	//
+	//CHECK(device->CreateBuffer(&StarIbuffDesc, &data, &StarIndexbuff));
 
 	// Vertex Buffers
-	//CreateObjBuffs(starVBuff, starverts, starindeces, ARRAYSIZE(starverts));
-
+	SetVertBuffer(&starVBuff, starverts);
+	// Index Buffers
+	SetIndexBuffer(&StarIndexbuff, starindeces);
 	// Set Buffers (Index, Constant, etc.)
 	SetBuffers();
 
@@ -285,10 +277,10 @@ bool DEMO_APP::Run()
 
 	// Object (Star)
 	size = sizeof(Object);
-	devContext->Map(Starbuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &map);
+	devContext->Map(StarCbuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &map);
 	memcpy(map.pData, &star, size);
-	devContext->Unmap(Starbuffer, 0);
-	devContext->VSSetConstantBuffers(1, 1, &Starbuffer);
+	devContext->Unmap(StarCbuffer, 0);
+	devContext->VSSetConstantBuffers(1, 1, &StarCbuffer);
 
 	// Scene
 	size = sizeof(Scene);
@@ -358,7 +350,7 @@ bool DEMO_APP::ShutDown()
 	RELEASE(Scenebuff);
 	RELEASE(Zbuffer)
 	RELEASE(StarIndexbuff);
-	RELEASE(Starbuffer);
+	RELEASE(StarCbuffer);
 	RELEASE(starVBuff);
 	RELEASE(GndIndexbuff);
 	RELEASE(Groundbuff);
@@ -405,6 +397,7 @@ LRESULT CALLBACK WndProc( HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam 
     return DefWindowProc( hWnd, message, wParam, lParam );
 }
 //********************* END WARNING ************************//
+
 
 void DEMO_APP::SetSwapChain()
 {
@@ -464,95 +457,111 @@ void DEMO_APP::SetStarMat(float Time)
 }
 void DEMO_APP::CreateStar()
 {
-	// TODO: PART 2 STEP 3a
+	// Set Vertices
 	int index = 1;
-	for (int i = 0; i < 360; i += 36)
+	SIMPLE_VERTEX currvert;
+	// Back Vertex
+	currvert.x = 0.0f;
+	currvert.y = 0.0f;
+	currvert.z = 0.4f;
+	currvert.w = 1.0f;
+	currvert.color[0] = 1.0f;
+	currvert.color[1] = 1.0f;
+	currvert.color[2] = 0.0f;
+	currvert.color[3] = 1.0f;
+	starverts.push_back(currvert);
+
+	for (int i = 0; i < 360; i += 36, index++)
 	{
 		// Position
-		starverts[index].x = (float)cosf(i * 0.01745277777777777777777777777778f);
-		starverts[index].y = (float)sinf(i * 0.01745277777777777777777777777778f);
-		starverts[index].z = 0;
-		starverts[index].w = 1.0f;
+		currvert.x = (float)cosf(i * 0.01745277777777777777777777777778f);
+		currvert.y = (float)sinf(i * 0.01745277777777777777777777777778f);
+		currvert.z = 0;
+		currvert.w = 1.0f;
 		// Color
-		starverts[index].color[0] = 0.0f;
-		starverts[index].color[1] = 0.0f;
-		starverts[index].color[2] = 0.0f;
-		starverts[index].color[3] = 1.0f;
+		currvert.color[0] = 0.0f;
+		currvert.color[1] = 0.0f;
+		currvert.color[2] = 0.0f;
+		currvert.color[3] = 1.0f;
 		// Inner Vertices
 		if (index % 2 == 0)
 		{
-			starverts[index].x /= 2;
-			starverts[index].y /= 2;
-			starverts[index].color[0] = 0.0f;
-			starverts[index].color[1] = 0.0f;
-			starverts[index].color[2] = 0.0f;
-			starverts[index].color[3] = 1.0f;
+			currvert.x /= 2;
+			currvert.y /= 2;
+			currvert.color[0] = 0.0f;
+			currvert.color[1] = 0.0f;
+			currvert.color[2] = 0.0f;
+			currvert.color[3] = 1.0f;
 		}
-		++index;
+		starverts.push_back(currvert);
 	}
-	starverts[0].x = 0.0f;
-	starverts[0].y = 0.0f;
-	starverts[0].z = 0.4f;
-	starverts[0].w = 1.0f;
-	starverts[11].x = 0.0f;
-	starverts[11].y = 0.0f;
-	starverts[11].z = -0.4f;
-	starverts[11].w = 1.0f;
-	starverts[0].color[0] = 1.0f;
-	starverts[0].color[1] = 1.0f;
-	starverts[0].color[2] = 0.0f;
-	starverts[0].color[3] = 1.0f;
-	starverts[11].color[0] = 1.0f;
-	starverts[11].color[1] = 1.0f;
-	starverts[11].color[2] = 0.0f;
-	starverts[11].color[3] = 1.0f;
+
+	// Front Vertex
+	currvert.x = 0.0f;
+	currvert.y = 0.0f;
+	currvert.z = -0.4f;
+	currvert.w = 1.0f;
+	currvert.color[0] = 1.0f;
+	currvert.color[1] = 1.0f;
+	currvert.color[2] = 0.0f;
+	currvert.color[3] = 1.0f;
+	starverts.push_back(currvert);
 }
 void DEMO_APP::CreateGround()
 {
 	// Ground Matrix
 	XMStoreFloat4x4(&ground.WorldMatrix, XMMatrixIdentity());
 
+	SIMPLE_VERTEX currvert;
 	// Top Face
-	groundverts[0].x = -16.0f;
-	groundverts[0].y = -2.0f;
-	groundverts[0].z = -16.0f;
-	groundverts[0].w = 1.0f;
+	currvert.x = -16.0f;
+	currvert.y = -2.0f;
+	currvert.z = -16.0f;
+	currvert.w = 1.0f;
+	groundverts.push_back(currvert);
 
-	groundverts[1].x = -16.0f;
-	groundverts[1].y = -2.0f;
-	groundverts[1].z = 16.0f;
-	groundverts[1].w = 1.0f;
+	currvert.x = -16.0f;
+	currvert.y = -2.0f;
+	currvert.z = 16.0f;
+	currvert.w = 1.0f;
+	groundverts.push_back(currvert);
 
-	groundverts[2].x = 16.0f;
-	groundverts[2].y = -2.0f;
-	groundverts[2].z = 16.0f;
-	groundverts[2].w = 1.0f;
+	currvert.x = 16.0f;
+	currvert.y = -2.0f;
+	currvert.z = 16.0f;
+	currvert.w = 1.0f;
+	groundverts.push_back(currvert);
 
-	groundverts[3].x = 16.0f;
-	groundverts[3].y = -2.0f;
-	groundverts[3].z = -16.0f;
-	groundverts[3].w = 1.0f;
+	currvert.x = 16.0f;
+	currvert.y = -2.0f;
+	currvert.z = -16.0f;
+	currvert.w = 1.0f;
+	groundverts.push_back(currvert);
 
 	// Bottom Face
-	groundverts[4].x = -16.0f;
-	groundverts[4].y = -3.0f;
-	groundverts[4].z = -16.0f;
-	groundverts[4].w = 1.0f;
+	currvert.x = -16.0f;
+	currvert.y = -3.0f;
+	currvert.z = -16.0f;
+	currvert.w = 1.0f;
+	groundverts.push_back(currvert);
 
-	groundverts[5].x = -16.0f;
-	groundverts[5].y = -3.0f;
-	groundverts[5].z = 16.0f;
-	groundverts[5].w = 1.0f;
+	currvert.x = -16.0f;
+	currvert.y = -3.0f;
+	currvert.z = 16.0f;
+	currvert.w = 1.0f;
+	groundverts.push_back(currvert);
 
-	groundverts[6].x = 16.0f;
-	groundverts[6].y = -3.0f;
-	groundverts[6].z = 16.0f;
-	groundverts[6].w = 1.0f;
+	currvert.x = 16.0f;
+	currvert.y = -3.0f;
+	currvert.z = 16.0f;
+	currvert.w = 1.0f;
+	groundverts.push_back(currvert);
 
-	groundverts[7].x = 16.0f;
-	groundverts[7].y = -3.0f;
-	groundverts[7].z = -16.0f;
-	groundverts[7].w = 1.0f;
+	currvert.x = 16.0f;
+	currvert.y = -3.0f;
+	currvert.z = -16.0f;
+	currvert.w = 1.0f;
+	groundverts.push_back(currvert);
 
 	// Colors
 	for (unsigned int i = 0; i < 4; i++)
@@ -564,35 +573,34 @@ void DEMO_APP::CreateGround()
 		}
 	}
 
-	unsigned int indeces[] =
+	vector<unsigned int> indeces =
 	{ 0, 1, 2,
 	0, 2, 3,
 	6, 5, 4,
 	7, 6, 4,
-
 	4, 1, 0,
 	5, 4, 1,
-
 	6, 2, 1,
 	5, 6, 1,
-
 	6, 7, 2,
 	7, 3, 2,
-
 	3, 7, 0,
 	7, 4, 0};
 
+	SetVertBuffer(&GroundVBuff, groundverts);
+	SetIndexBuffer(&GndIndexbuff, indeces);
+#if 0
 	// TODO: PART 2 STEP 3c
 	D3D11_SUBRESOURCE_DATA data;
 	ZeroMemory(&data, sizeof(data));
-	data.pSysMem = groundverts;
+	data.pSysMem = &groundverts;
 	data.SysMemPitch = NULL;
 	data.SysMemSlicePitch = NULL;
 
 	// Vertex buffer
 	D3D11_BUFFER_DESC GndbuffDesc;
 	ZeroMemory(&GndbuffDesc, sizeof(GndbuffDesc));
-	GndbuffDesc.ByteWidth = sizeof(SIMPLE_VERTEX) * ARRAYSIZE(groundverts);
+	GndbuffDesc.ByteWidth = sizeof(SIMPLE_VERTEX) * groundverts.size();
 	GndbuffDesc.Usage = D3D11_USAGE_DEFAULT;
 	GndbuffDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
 	GndbuffDesc.CPUAccessFlags = D3D11_USAGE_DEFAULT;
@@ -609,10 +617,12 @@ void DEMO_APP::CreateGround()
 	GndIbuffDesc.Usage = D3D11_USAGE_IMMUTABLE;
 
 	CHECK(device->CreateBuffer(&GndIbuffDesc, &data, &GndIndexbuff));
+#endif
 }
 void DEMO_APP::SetBuffers()
 {
 	// Constant Buffer
+	D3D11_BUFFER_DESC CbuffDesc;
 	ZeroMemory(&CbuffDesc, sizeof(CbuffDesc));
 	CbuffDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
 	CbuffDesc.Usage = D3D11_USAGE_DYNAMIC;
@@ -622,15 +632,17 @@ void DEMO_APP::SetBuffers()
 	CHECK(device->CreateBuffer(&CbuffDesc, nullptr, &Cbuffer));
 
 	// Star Buffer
-	ZeroMemory(&StarbuffDesc, sizeof(StarbuffDesc));
-	StarbuffDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-	StarbuffDesc.Usage = D3D11_USAGE_DYNAMIC;
-	StarbuffDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-	StarbuffDesc.ByteWidth = sizeof(Object);
+	D3D11_BUFFER_DESC StarCbuffDesc;
+	ZeroMemory(&StarCbuffDesc, sizeof(StarCbuffDesc));
+	StarCbuffDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+	StarCbuffDesc.Usage = D3D11_USAGE_DYNAMIC;
+	StarCbuffDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+	StarCbuffDesc.ByteWidth = sizeof(Object);
 
-	CHECK(device->CreateBuffer(&StarbuffDesc, nullptr, &Starbuffer));
+	CHECK(device->CreateBuffer(&StarCbuffDesc, nullptr, &StarCbuffer));
 	
 	// Ground Buffer
+	D3D11_BUFFER_DESC GndbuffDesc;
 	ZeroMemory(&GndbuffDesc, sizeof(GndbuffDesc));
 	GndbuffDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
 	GndbuffDesc.Usage = D3D11_USAGE_DYNAMIC;
@@ -640,6 +652,7 @@ void DEMO_APP::SetBuffers()
 	CHECK(device->CreateBuffer(&GndbuffDesc, nullptr, &Groundbuff));
 
 	// Scene Buffer (View/Projection)
+	D3D11_BUFFER_DESC ScnebuffDesc;
 	ZeroMemory(&ScnebuffDesc, sizeof(ScnebuffDesc));
 	ScnebuffDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
 	ScnebuffDesc.Usage = D3D11_USAGE_DYNAMIC;
@@ -649,6 +662,7 @@ void DEMO_APP::SetBuffers()
 	CHECK(device->CreateBuffer(&ScnebuffDesc, nullptr, &Scenebuff));
 
 	// Z buffer
+	D3D11_TEXTURE2D_DESC ZbuffDesc;
 	ZeroMemory(&ZbuffDesc, sizeof(ZbuffDesc));
 	ZbuffDesc.BindFlags = D3D11_BIND_DEPTH_STENCIL;
 	ZbuffDesc.Format = DXGI_FORMAT_D32_FLOAT;
@@ -665,33 +679,42 @@ void DEMO_APP::SetBuffers()
 }
 
 template<typename Type>
-void DEMO_APP<Type>::SetVertBuffer(ID3D11Buffer *vertbuff, vector<Type> verts)
+void DEMO_APP::SetVertBuffer(ID3D11Buffer **vertbuff, vector<Type> verts)
 {
 	// TODO: PART 2 STEP 3c
 	D3D11_SUBRESOURCE_DATA data;
 	ZeroMemory(&data, sizeof(data));
-	data.pSysMem = verts;
+	data.pSysMem = verts.data();
 	data.SysMemPitch = NULL;
 	data.SysMemSlicePitch = NULL;
 
 	// Vertex buffer
 	D3D11_BUFFER_DESC ObjbuffDesc;
 	ZeroMemory(&ObjbuffDesc, sizeof(ObjbuffDesc));
-	ObjbuffDesc.ByteWidth = sizeof(SIMPLE_VERTEX) * numverts;
+	ObjbuffDesc.ByteWidth = sizeof(Type) * verts.size();
 	ObjbuffDesc.Usage = D3D11_USAGE_DEFAULT;
 	ObjbuffDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
 	ObjbuffDesc.CPUAccessFlags = D3D11_USAGE_DEFAULT;
 	ObjbuffDesc.StructureByteStride = 0;
 
-	CHECK(device->CreateBuffer(&ObjbuffDesc, &data, &vertbuff));
-
+	CHECK(device->CreateBuffer(&ObjbuffDesc, &data, vertbuff));
+}
+template<typename Type>
+void DEMO_APP::SetIndexBuffer(ID3D11Buffer **indexBuff, vector<Type> indices)
+{
 	// Index buffer
-	data.pSysMem = indices;
-	ZeroMemory(&StarIbuffDesc, sizeof(StarIbuffDesc));
-	StarIbuffDesc.BindFlags = D3D11_BIND_INDEX_BUFFER;
-	StarIbuffDesc.ByteWidth = sizeof(indices);
-	StarIbuffDesc.CPUAccessFlags = NULL;
-	StarIbuffDesc.Usage = D3D11_USAGE_IMMUTABLE;
+	D3D11_SUBRESOURCE_DATA data;
+	data.pSysMem = indices.data();
+	data.SysMemPitch = NULL;
+	data.SysMemSlicePitch = NULL;
 
-	CHECK(device->CreateBuffer(&StarIbuffDesc, &data, &StarIndexbuff));
+	D3D11_BUFFER_DESC IbuffDesc;
+	ZeroMemory(&IbuffDesc, sizeof(IbuffDesc));
+	IbuffDesc.ByteWidth = sizeof(Type) * indices.size();
+	IbuffDesc.Usage = D3D11_USAGE_IMMUTABLE;
+	IbuffDesc.BindFlags = D3D11_BIND_INDEX_BUFFER;
+	IbuffDesc.CPUAccessFlags = D3D11_USAGE_DEFAULT;
+	IbuffDesc.StructureByteStride = 0;
+
+	CHECK(device->CreateBuffer(&IbuffDesc, &data, indexBuff));
 }
