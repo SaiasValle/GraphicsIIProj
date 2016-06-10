@@ -12,13 +12,18 @@
 //************************************************************
 //************ INCLUDES & DEFINES ****************************
 //************************************************************
-#include "Camera.h"
+#include "Object.h"
 #include "XTime.h"
+#include "DDSTextureLoader.h"
+#include <atlbase.h>
 
 
-// TODO: PART 2 STEP 6
+// Shaders
 #include "Trivial_VS.csh"
 #include "Trivial_PS.csh"
+#include "Skybox_VS.csh"
+#include "Skybox_PS.csh"
+
 
 #define RELEASE(point) { if(point) { point->Release(); point = nullptr; } }
 #define CHECK(HR) { assert(HR == S_OK); }
@@ -33,15 +38,30 @@ class DEMO_APP
 	WNDPROC							appWndProc;
 	HWND							window;
 	// TODO: PART 1 STEP 2
-	ID3D11Device *device			= nullptr;
-	ID3D11DeviceContext *devContext = nullptr;
-	ID3D11RenderTargetView *RTV		= nullptr;
-	ID3D11DepthStencilView *DSV		= nullptr;
-	ID3D11InputLayout *input		= nullptr;
-	ID3D11Texture2D *image			= nullptr;
-	IDXGISwapChain *swapchain		= nullptr;
+	
+	ID3D11Device *device					= nullptr;
+	ID3D11DeviceContext *devContext			= nullptr;
+	ID3D11RenderTargetView *RTV				= nullptr;
+	ID3D11DepthStencilView *DSV				= nullptr;
+	ID3D11InputLayout *input				= nullptr;
+	ID3D11Texture2D *image					= nullptr;
+	IDXGISwapChain *swapchain				= nullptr;
+	ID3D11RasterizerState *RastState		= nullptr;
+	ID3D11RasterizerState *RastStatetoggled = nullptr;
 	D3D11_VIEWPORT viewport;
+	D3D11_VIEWPORT viewportR;
 	DXGI_SWAP_CHAIN_DESC swapDesc;
+
+	// Skybox
+	Object Skybox;
+	ID3D11InputLayout *Skyboxinput  = nullptr;
+	ID3D11Texture2D *Skytexture		= nullptr;
+	ID3D11ShaderResourceView *SkySRV = nullptr;
+	ID3D11DepthStencilView *SkyDSV	= nullptr;
+	ID3D11Texture2D *SkyZbuffer		= nullptr;
+	ID3D11Buffer *SkyVbuffer		= nullptr;
+	ID3D11Buffer *SkyCbuffer		= nullptr;
+	ID3D11Buffer *SkyIbuffer		= nullptr;
 
 	// Other
 	XTime clock;
@@ -51,44 +71,37 @@ class DEMO_APP
 	Object ground;
 
 	// Shaders
-	ID3D11VertexShader *VertShader	= nullptr;
-	ID3D11PixelShader *PixelShader	= nullptr;
+	ID3D11VertexShader *VertShader	  = nullptr;
+	ID3D11PixelShader *PixelShader	  = nullptr;
+	ID3D11VertexShader *SkyboxVShader = nullptr;
+	ID3D11PixelShader *SkyboxPShader  = nullptr;
 	
 	// Star Buffers
-	ID3D11Buffer *starVBuff			= nullptr;
+	ID3D11Buffer *StarVbuffer		= nullptr;
 	ID3D11Buffer *StarCbuffer		= nullptr;
 	ID3D11Buffer *StarIndexbuff;
 
 	// Ground Buffers
-	ID3D11Buffer *GroundVBuff		= nullptr;
-	ID3D11Buffer *Groundbuff		= nullptr;
+	ID3D11Buffer *GroundVbuff		= nullptr;
+	ID3D11Buffer *GroundCbuff		= nullptr;
 	ID3D11Buffer *GndIndexbuff;
 
-	// Constant buffer
-	ID3D11Buffer *Cbuffer;
 	// Scene buffer
 	ID3D11Buffer *Scenebuff;
 	// Z buffer
 	ID3D11Texture2D *Zbuffer;
-
-	// TODO: PART 3 STEP 2b
-	struct SEND_TO_VRAM
-	{
-		float constantColor[4];
-		float constantOffset[2];
-		float padding[2];
-	};
-	// TODO: PART 3 STEP 4a
-	SEND_TO_VRAM toShader;
 
 public:
 	struct SIMPLE_VERTEX
 	{
 		float x, y, z, w;
 		float color[4];
+		float uvw[3];
+		float normal[3];
 	};
 	vector<SIMPLE_VERTEX> starverts;
 	vector<SIMPLE_VERTEX> groundverts;
+	vector<SIMPLE_VERTEX> skyboxverts;
 
 	DEMO_APP(HINSTANCE hinst, WNDPROC proc);
 	bool Run();
@@ -99,14 +112,17 @@ public:
 	void SetStarMat(float Time);
 	void CreateStar();
 	void CreateGround();
+	void CreateSkybox();
 	// Set Buffers
-	void SetBuffers();
+	void Initialize();
 	template <typename Type>
 	void SetVertBuffer(ID3D11Buffer **vertbuff, vector<Type> verts);
 	template <typename Type>
-	void SetIndexBuffer(ID3D11Buffer **vertbuff, vector<Type> verts);
+	void SetIndexBuffer(ID3D11Buffer **indexbuff, vector<Type> verts);
 	// Sets Swapchain & Creates Viewport
 	void SetSwapChain();
+	// Draw
+	void Draw(Object *obj, ID3D11Buffer **vertbuff, ID3D11Buffer *indexbuff, ID3D11Buffer *constbuff, unsigned int numindices);
 };
 
 //************************************************************
@@ -145,93 +161,43 @@ DEMO_APP::DEMO_APP(HINSTANCE hinst, WNDPROC proc)
 	SetSwapChain();
 	// Creating Star
 #if 1
-	vector<unsigned int> starindeces =
-	{ 0, 1, 2,
-	0, 2, 3,
-	0, 3, 4,
-	0, 4, 5,
-	0, 5, 6,
-	0, 6, 7,
-	0, 7, 8,
-	0, 8, 9,
-	0, 9, 10,
-	0, 10, 1,
-	11, 2, 1,
-	11, 3, 2,
-	11, 4, 3,
-	11, 5, 4,
-	11, 6, 5,
-	11, 7, 6,
-	11, 8, 7,
-	11, 9, 8,
-	11, 10, 9,
-	11, 1, 10 };
+
 	CreateStar();
 	CreateGround();
+	CreateSkybox();
 #endif
 
-	// TODO: PART 2 STEP 3c
-	//D3D11_SUBRESOURCE_DATA data;
-	//ZeroMemory(&data, sizeof(data));
-	//data.pSysMem = &starverts;
-	//data.SysMemPitch = NULL;
-	//data.SysMemSlicePitch = NULL;
-	//
-	//// Vertex buffer
-	//D3D11_BUFFER_DESC ObjbuffDesc;
-	//ZeroMemory(&ObjbuffDesc, sizeof(ObjbuffDesc));
-	//ObjbuffDesc.ByteWidth = sizeof(SIMPLE_VERTEX) * starverts.size();
-	//ObjbuffDesc.Usage = D3D11_USAGE_DEFAULT;
-	//ObjbuffDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
-	//ObjbuffDesc.CPUAccessFlags = D3D11_USAGE_DEFAULT;
-	//ObjbuffDesc.StructureByteStride = 0;
-	//
-	//CHECK(device->CreateBuffer(&ObjbuffDesc, &data, &starVBuff));
-	//
-	//// Index buffer
-	//data.pSysMem = &starindeces;
-	//ZeroMemory(&StarIbuffDesc, sizeof(StarIbuffDesc));
-	//StarIbuffDesc.BindFlags = D3D11_BIND_INDEX_BUFFER;
-	//StarIbuffDesc.ByteWidth = sizeof(starindeces);
-	//StarIbuffDesc.CPUAccessFlags = NULL;
-	//StarIbuffDesc.Usage = D3D11_USAGE_IMMUTABLE;
-	//
-	//CHECK(device->CreateBuffer(&StarIbuffDesc, &data, &StarIndexbuff));
-
-	// Vertex Buffers
-	SetVertBuffer(&starVBuff, starverts);
-	// Index Buffers
-	SetIndexBuffer(&StarIndexbuff, starindeces);
+	
 	// Set Buffers (Index, Constant, etc.)
-	SetBuffers();
+	Initialize();
 
-	// TODO: PART 2 STEP 5
-	// ADD SHADERS TO PROJECT, SET BUILD OPTIONS & COMPILE
-
-	// TODO: PART 2 STEP 7
-	CHECK(device->CreateVertexShader(Trivial_VS, sizeof(Trivial_VS), nullptr, &VertShader));
-	CHECK(device->CreatePixelShader(Trivial_PS, sizeof(Trivial_PS), nullptr, &PixelShader));
-
-	// TODO: PART 2 STEP 8a
+	// Standard Vertex Layout
 	D3D11_INPUT_ELEMENT_DESC vertLayout[]
 	{
 		{ "POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
 		{ "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 }
 	};
+	// Skybox Vertex Layout
+	D3D11_INPUT_ELEMENT_DESC SkyboxVLayout[]
+	{
+		{ "POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+		{ "UVW", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 }
+	};
 
-	// TODO: PART 2 STEP 8b
+	// ADD SHADERS TO PROJECT, SET BUILD OPTIONS & COMPILE
+	// Create Shaders
+	CHECK(device->CreateVertexShader(Trivial_VS, sizeof(Trivial_VS), nullptr, &VertShader));
+	CHECK(device->CreatePixelShader(Trivial_PS, sizeof(Trivial_PS), nullptr, &PixelShader));
+	// Sky
+	CHECK(device->CreateVertexShader(Skybox_VS, sizeof(Skybox_VS), nullptr, &SkyboxVShader));
+	CHECK(device->CreatePixelShader(Skybox_PS, sizeof(Skybox_PS), nullptr, &SkyboxPShader));
+
+	// Create Input Layouts
 	CHECK(device->CreateInputLayout(vertLayout, ARRAYSIZE(vertLayout), Trivial_VS, sizeof(Trivial_VS), &input));
-	
+	CHECK(device->CreateInputLayout(SkyboxVLayout, ARRAYSIZE(SkyboxVLayout), Skybox_VS, sizeof(Skybox_VS), &Skyboxinput));
 
-
-	// TODO: PART 3 STEP 4b
-	toShader.constantOffset[0] = 0;
-	toShader.constantOffset[1] = 0;
-
-	toShader.constantColor[0] = 1;
-	toShader.constantColor[1] = 1;
-	toShader.constantColor[2] = 0;
-	toShader.constantColor[3] = 1;
+	// Skybox Texture
+	CHECK(CreateDDSTextureFromFile(device, L"HW_City.dds", nullptr, &SkySRV));
 
 	// Set Projection Matrix
 	SetProjectionMatrix();
@@ -262,61 +228,88 @@ bool DEMO_APP::Run()
 	devContext->RSSetViewports(1, &viewport);
 	
 	// TODO: PART 1 STEP 7c
-	float color[4] = { 0.1f, 0.1f, 0.1f, 1.0f };
+	float color[4] = { 0.4f, 0.1f, 0.1f, 1.0f };
 	devContext->ClearDepthStencilView(DSV, D3D11_CLEAR_DEPTH, 1, 0);
 	devContext->ClearRenderTargetView(RTV, color);
+
+	devContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	
 	// Constant
-	unsigned int size = sizeof(SEND_TO_VRAM);
+	unsigned int size;
 	unsigned int offset = 0;
 	D3D11_MAPPED_SUBRESOURCE map;
-	devContext->Map(Cbuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &map);
-	memcpy(map.pData, &toShader, size);
-	devContext->Unmap(Cbuffer, 0);
-	devContext->VSSetConstantBuffers(0, 1, &Cbuffer);
-
-	// Object (Star)
-	size = sizeof(Object);
-	devContext->Map(StarCbuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &map);
-	memcpy(map.pData, &star, size);
-	devContext->Unmap(StarCbuffer, 0);
-	devContext->VSSetConstantBuffers(1, 1, &StarCbuffer);
 
 	// Scene
 	size = sizeof(Scene);
 	devContext->Map(Scenebuff, 0, D3D11_MAP_WRITE_DISCARD, 0, &map);
 	memcpy(map.pData, &scene, size);
 	devContext->Unmap(Scenebuff, 0);
-	devContext->VSSetConstantBuffers(2, 1, &Scenebuff);
-
-	// Star Bindings
-	size = sizeof(SIMPLE_VERTEX);
-	devContext->IASetVertexBuffers(0, 1, &starVBuff, &size, &offset);
-	devContext->IASetIndexBuffer(StarIndexbuff, DXGI_FORMAT_R32_UINT, 0);
-
-	// Shaders
+	devContext->VSSetConstantBuffers(1, 1, &Scenebuff);
+	
+	// Standard Shaders
 	devContext->VSSetShader(VertShader, nullptr, 0);
 	devContext->PSSetShader(PixelShader, nullptr, 0);
-
-	// Topology
+	// Standard Input Layout
 	devContext->IASetInputLayout(input);
-	devContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
+	// Object (Star)
+#if 1
+	size = sizeof(Object);
+	devContext->Map(StarCbuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &map);
+	memcpy(map.pData, &star, size);
+	devContext->Unmap(StarCbuffer, 0);
+	devContext->VSSetConstantBuffers(0, 1, &StarCbuffer);
+	// Star Bindings
+	size = sizeof(SIMPLE_VERTEX);
+	devContext->IASetVertexBuffers(0, 1, &StarVbuffer, &size, &offset);
+	devContext->IASetIndexBuffer(StarIndexbuff, DXGI_FORMAT_R32_UINT, 0);
 	// Draw Star
 	devContext->DrawIndexed(60, 0, 0);
-
+#endif
 	// Object (Ground)
+#if 1
 	size = sizeof(Object);
-	devContext->Map(Groundbuff, 0, D3D11_MAP_WRITE_DISCARD, 0, &map);
+	devContext->Map(GroundCbuff, 0, D3D11_MAP_WRITE_DISCARD, 0, &map);
 	memcpy(map.pData, &ground, size);
-	devContext->Unmap(Groundbuff, 0);
-	devContext->VSSetConstantBuffers(1, 1, &Groundbuff);
+	devContext->Unmap(GroundCbuff, 0);
+	devContext->VSSetConstantBuffers(0, 1, &GroundCbuff);
 	// Ground Bindings
 	size = sizeof(SIMPLE_VERTEX);
-	devContext->IASetVertexBuffers(0, 1, &GroundVBuff, &size, &offset);
+	devContext->IASetVertexBuffers(0, 1, &GroundVbuff, &size, &offset);
 	devContext->IASetIndexBuffer(GndIndexbuff, DXGI_FORMAT_R32_UINT, 0);
 	// Draw Ground
 	devContext->DrawIndexed(36, 0, 0);
+#endif
+
+	// Skybox
+	// Skybox Shaders
+	devContext->VSSetShader(SkyboxVShader, nullptr, 0);
+	devContext->PSSetShader(SkyboxPShader, nullptr, 0);
+	// Skybox Input Layout
+	devContext->IASetInputLayout(Skyboxinput);
+	// Texture
+	devContext->PSSetShaderResources(0, 1, &SkySRV);
+#if 1
+	XMMATRIX caminverse = XMMatrixInverse(0, XMLoadFloat4x4(&camera.GetCameraMat()));
+
+	Skybox.WorldMatrix._41 = caminverse.r[3].m128_f32[0];
+	Skybox.WorldMatrix._42 = caminverse.r[3].m128_f32[1];
+	Skybox.WorldMatrix._43 = caminverse.r[3].m128_f32[2];
+
+	size = sizeof(Object);
+	devContext->Map(SkyCbuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &map);
+	memcpy(map.pData, &Skybox, size);
+	devContext->Unmap(SkyCbuffer, 0);
+	devContext->VSSetConstantBuffers(0, 1, &SkyCbuffer);
+	// Skybox Bindings
+	size = sizeof(SIMPLE_VERTEX);
+	devContext->IASetVertexBuffers(0, 1, &SkyVbuffer, &size, &offset);
+	devContext->IASetIndexBuffer(SkyIbuffer, DXGI_FORMAT_R32_UINT, 0);
+	// Draw Skybox
+	devContext->RSSetState(RastStatetoggled);
+	devContext->DrawIndexed(36, 0, 0);
+	devContext->RSSetState(RastState);
+	devContext->ClearDepthStencilView(DSV, D3D11_CLEAR_DEPTH, 1, 0);
+#endif
 
 	// TODO: PART 1 STEP 8
 	swapchain->Present(0, 0);
@@ -341,20 +334,32 @@ bool DEMO_APP::ShutDown()
 	RELEASE(devContext);
 	RELEASE(RTV);
 	RELEASE(DSV);
+	RELEASE(RastState);
 	RELEASE(VertShader);
 	RELEASE(PixelShader);
+	RELEASE(SkyboxVShader);
+	RELEASE(SkyboxPShader);
 	RELEASE(input);
 	RELEASE(swapchain);
 	RELEASE(image);
-	RELEASE(Cbuffer);
 	RELEASE(Scenebuff);
 	RELEASE(Zbuffer)
 	RELEASE(StarIndexbuff);
 	RELEASE(StarCbuffer);
-	RELEASE(starVBuff);
+	RELEASE(StarVbuffer);
 	RELEASE(GndIndexbuff);
-	RELEASE(Groundbuff);
-	RELEASE(GroundVBuff);
+	RELEASE(GroundCbuff);
+	RELEASE(GroundVbuff);
+	RELEASE(SkyZbuffer);
+	RELEASE(SkyVbuffer);
+	RELEASE(SkyCbuffer);
+	RELEASE(SkyIbuffer);
+	RELEASE(Skyboxinput);
+	RELEASE(Skytexture);
+	RELEASE(SkySRV);
+	RELEASE(SkyDSV);
+	RELEASE(RastState);
+	RELEASE(RastStatetoggled);
 
 	UnregisterClass( L"DirectXApplication", application ); 
 	return true;
@@ -506,6 +511,33 @@ void DEMO_APP::CreateStar()
 	currvert.color[2] = 0.0f;
 	currvert.color[3] = 1.0f;
 	starverts.push_back(currvert);
+
+	vector<unsigned int> starindeces =
+	{ 0, 1, 2,
+	0, 2, 3,
+	0, 3, 4,
+	0, 4, 5,
+	0, 5, 6,
+	0, 6, 7,
+	0, 7, 8,
+	0, 8, 9,
+	0, 9, 10,
+	0, 10, 1,
+	11, 2, 1,
+	11, 3, 2,
+	11, 4, 3,
+	11, 5, 4,
+	11, 6, 5,
+	11, 7, 6,
+	11, 8, 7,
+	11, 9, 8,
+	11, 10, 9,
+	11, 1, 10 };
+
+	// Vertex Buffers
+	SetVertBuffer(&StarVbuffer, starverts);
+	// Index Buffers
+	SetIndexBuffer(&StarIndexbuff, starindeces);
 }
 void DEMO_APP::CreateGround()
 {
@@ -518,6 +550,7 @@ void DEMO_APP::CreateGround()
 	currvert.y = -2.0f;
 	currvert.z = -16.0f;
 	currvert.w = 1.0f;
+
 	groundverts.push_back(currvert);
 
 	currvert.x = -16.0f;
@@ -587,51 +620,136 @@ void DEMO_APP::CreateGround()
 	3, 7, 0,
 	7, 4, 0};
 
-	SetVertBuffer(&GroundVBuff, groundverts);
+	SetVertBuffer(&GroundVbuff, groundverts);
 	SetIndexBuffer(&GndIndexbuff, indeces);
-#if 0
-	// TODO: PART 2 STEP 3c
-	D3D11_SUBRESOURCE_DATA data;
-	ZeroMemory(&data, sizeof(data));
-	data.pSysMem = &groundverts;
-	data.SysMemPitch = NULL;
-	data.SysMemSlicePitch = NULL;
-
-	// Vertex buffer
-	D3D11_BUFFER_DESC GndbuffDesc;
-	ZeroMemory(&GndbuffDesc, sizeof(GndbuffDesc));
-	GndbuffDesc.ByteWidth = sizeof(SIMPLE_VERTEX) * groundverts.size();
-	GndbuffDesc.Usage = D3D11_USAGE_DEFAULT;
-	GndbuffDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
-	GndbuffDesc.CPUAccessFlags = D3D11_USAGE_DEFAULT;
-	GndbuffDesc.StructureByteStride = 0;
-
-	CHECK(device->CreateBuffer(&GndbuffDesc, &data, &GroundVBuff));
-
-	// Index buffer
-	data.pSysMem = indeces;
-	ZeroMemory(&GndIbuffDesc, sizeof(GndIbuffDesc));
-	GndIbuffDesc.BindFlags = D3D11_BIND_INDEX_BUFFER;
-	GndIbuffDesc.ByteWidth = sizeof(indeces);
-	GndIbuffDesc.CPUAccessFlags = NULL;
-	GndIbuffDesc.Usage = D3D11_USAGE_IMMUTABLE;
-
-	CHECK(device->CreateBuffer(&GndIbuffDesc, &data, &GndIndexbuff));
-#endif
 }
-void DEMO_APP::SetBuffers()
+void DEMO_APP::CreateSkybox()
 {
-	// Constant Buffer
-	D3D11_BUFFER_DESC CbuffDesc;
-	ZeroMemory(&CbuffDesc, sizeof(CbuffDesc));
-	CbuffDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-	CbuffDesc.Usage = D3D11_USAGE_DYNAMIC;
-	CbuffDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-	CbuffDesc.ByteWidth = sizeof(SEND_TO_VRAM);
+	XMStoreFloat4x4(&Skybox.WorldMatrix, XMMatrixIdentity());
 
-	CHECK(device->CreateBuffer(&CbuffDesc, nullptr, &Cbuffer));
+	SIMPLE_VERTEX currvert;
+	// Top Face
+	currvert.x = -24.0f;
+	currvert.y = 24.0f;
+	currvert.z = -24.0f;
+	currvert.w = 1.0f;
 
-	// Star Buffer
+	skyboxverts.push_back(currvert);
+
+	currvert.x = -24.0f;
+	currvert.y = 24.0f;
+	currvert.z = 24.0f;
+	currvert.w = 1.0f;
+	skyboxverts.push_back(currvert);
+
+	currvert.x = 24.0f;
+	currvert.y = 24.0f;
+	currvert.z = 24.0f;
+	currvert.w = 1.0f;
+	skyboxverts.push_back(currvert);
+
+	currvert.x = 24.0f;
+	currvert.y = 24.0f;
+	currvert.z = -24.0f;
+	currvert.w = 1.0f;
+	skyboxverts.push_back(currvert);
+
+	// Bottom Face
+	currvert.x = -24.0f;
+	currvert.y = -24.0f;
+	currvert.z = -24.0f;
+	currvert.w = 1.0f;
+	skyboxverts.push_back(currvert);
+
+	currvert.x = -24.0f;
+	currvert.y = -24.0f;
+	currvert.z = 24.0f;
+	currvert.w = 1.0f;
+	skyboxverts.push_back(currvert);
+
+	currvert.x = 24.0f;
+	currvert.y = -24.0f;
+	currvert.z = 24.0f;
+	currvert.w = 1.0f;
+	skyboxverts.push_back(currvert);
+
+	currvert.x = 24.0f;
+	currvert.y = -24.0f;
+	currvert.z = -24.0f;
+	currvert.w = 1.0f;
+	skyboxverts.push_back(currvert);
+
+	// Colors
+	for (unsigned int i = 0; i < 8; i++)
+	{
+		for (unsigned int j = 0; j < 4; j++)
+		{
+			skyboxverts[i].color[1] = 1.0f;
+		}
+	}
+
+	vector<unsigned int> indeces =
+	{ 0, 1, 2,
+	2, 3, 0,
+	4, 5, 6,
+	6, 7, 4,
+	0, 3, 7,
+	7, 4, 0,
+	1, 0, 4,
+	4, 5, 1,
+	1, 2, 6,
+	6, 5, 1,
+	3, 2, 6,
+	6, 7, 3 };
+
+	SetVertBuffer(&SkyVbuffer, skyboxverts);
+	SetIndexBuffer(&SkyIbuffer, indeces);
+}
+void DEMO_APP::Initialize()
+{
+	// Raster State (Normal)
+	D3D11_RASTERIZER_DESC rasterDesc;
+	ZeroMemory(&rasterDesc, sizeof(rasterDesc));
+	rasterDesc.FillMode = D3D11_FILL_SOLID;
+	rasterDesc.CullMode = D3D11_CULL_BACK;
+	rasterDesc.FrontCounterClockwise = false;
+	rasterDesc.DepthBias = 0;
+	rasterDesc.SlopeScaledDepthBias = 0.0f;
+	rasterDesc.DepthBiasClamp = 0.0f;
+	rasterDesc.DepthClipEnable = true;
+	rasterDesc.ScissorEnable = false;
+	rasterDesc.MultisampleEnable = false;
+	rasterDesc.AntialiasedLineEnable = false;
+	
+	CHECK(device->CreateRasterizerState(&rasterDesc, &RastState));
+	
+	// Raster State (Toggled)
+	rasterDesc;
+	ZeroMemory(&rasterDesc, sizeof(rasterDesc));
+	rasterDesc.FillMode = D3D11_FILL_SOLID;
+	rasterDesc.CullMode = D3D11_CULL_NONE;
+	rasterDesc.FrontCounterClockwise = true;
+	rasterDesc.DepthBias = 0;
+	rasterDesc.SlopeScaledDepthBias = 0.0f;
+	rasterDesc.DepthBiasClamp = 0.0f;
+	rasterDesc.DepthClipEnable = true;
+	rasterDesc.ScissorEnable = false;
+	rasterDesc.MultisampleEnable = false;
+	rasterDesc.AntialiasedLineEnable = false;
+	
+	CHECK(device->CreateRasterizerState(&rasterDesc, &RastStatetoggled));
+
+	// Skybox Constant Buffer
+	D3D11_BUFFER_DESC SkyCbuffDesc;
+	ZeroMemory(&SkyCbuffDesc, sizeof(SkyCbuffDesc));
+	SkyCbuffDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+	SkyCbuffDesc.Usage = D3D11_USAGE_DYNAMIC;
+	SkyCbuffDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+	SkyCbuffDesc.ByteWidth = sizeof(Object);
+
+	CHECK(device->CreateBuffer(&SkyCbuffDesc, nullptr, &SkyCbuffer));
+
+	// Star Constant Buffer
 	D3D11_BUFFER_DESC StarCbuffDesc;
 	ZeroMemory(&StarCbuffDesc, sizeof(StarCbuffDesc));
 	StarCbuffDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
@@ -641,25 +759,25 @@ void DEMO_APP::SetBuffers()
 
 	CHECK(device->CreateBuffer(&StarCbuffDesc, nullptr, &StarCbuffer));
 	
-	// Ground Buffer
-	D3D11_BUFFER_DESC GndbuffDesc;
-	ZeroMemory(&GndbuffDesc, sizeof(GndbuffDesc));
-	GndbuffDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-	GndbuffDesc.Usage = D3D11_USAGE_DYNAMIC;
-	GndbuffDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-	GndbuffDesc.ByteWidth = sizeof(Object);
+	// Ground Constant Buffer
+	D3D11_BUFFER_DESC GndCbuffDesc;
+	ZeroMemory(&GndCbuffDesc, sizeof(GndCbuffDesc));
+	GndCbuffDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+	GndCbuffDesc.Usage = D3D11_USAGE_DYNAMIC;
+	GndCbuffDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+	GndCbuffDesc.ByteWidth = sizeof(Object);
 
-	CHECK(device->CreateBuffer(&GndbuffDesc, nullptr, &Groundbuff));
+	CHECK(device->CreateBuffer(&GndCbuffDesc, nullptr, &GroundCbuff));
 
-	// Scene Buffer (View/Projection)
-	D3D11_BUFFER_DESC ScnebuffDesc;
-	ZeroMemory(&ScnebuffDesc, sizeof(ScnebuffDesc));
-	ScnebuffDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-	ScnebuffDesc.Usage = D3D11_USAGE_DYNAMIC;
-	ScnebuffDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-	ScnebuffDesc.ByteWidth = sizeof(Scene);
+	// Scene Constant Buffer (View/Projection)
+	D3D11_BUFFER_DESC ScneCbuffDesc;
+	ZeroMemory(&ScneCbuffDesc, sizeof(ScneCbuffDesc));
+	ScneCbuffDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+	ScneCbuffDesc.Usage = D3D11_USAGE_DYNAMIC;
+	ScneCbuffDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+	ScneCbuffDesc.ByteWidth = sizeof(Scene);
 
-	CHECK(device->CreateBuffer(&ScnebuffDesc, nullptr, &Scenebuff));
+	CHECK(device->CreateBuffer(&ScneCbuffDesc, nullptr, &Scenebuff));
 
 	// Z buffer
 	D3D11_TEXTURE2D_DESC ZbuffDesc;
@@ -676,6 +794,27 @@ void DEMO_APP::SetBuffers()
 
 	CHECK(device->CreateTexture2D(&ZbuffDesc, 0, &Zbuffer));
 	CHECK(device->CreateDepthStencilView(Zbuffer, nullptr, &DSV));
+}
+void DEMO_APP::Draw(Object *obj, ID3D11Buffer **vertbuff, ID3D11Buffer *indexbuff, ID3D11Buffer *constbuff, unsigned int numindices)
+{
+	unsigned int size = 0;
+	unsigned int offset = 0;
+	D3D11_MAPPED_SUBRESOURCE map;
+
+	// Object 
+	size = sizeof(Object);
+	devContext->Map(constbuff, 0, D3D11_MAP_WRITE_DISCARD, 0, &map);
+	memcpy(map.pData, &obj, size);
+	devContext->Unmap(constbuff, 0);
+	devContext->VSSetConstantBuffers(1, 1, &constbuff);
+
+	// Bindings
+	size = sizeof(SIMPLE_VERTEX);
+	devContext->IASetVertexBuffers(0, 1, vertbuff, &size, &offset);
+	devContext->IASetIndexBuffer(indexbuff, DXGI_FORMAT_R32_UINT, 0);
+
+	// Draw Ground
+	devContext->DrawIndexed(numindices, 0, 0);
 }
 
 template<typename Type>

@@ -63,3 +63,4 @@ struct VertexWithPositionOut
 	float4 position			: SV_POSITION;
 	float4 pixelPosition	: TEXCOORD0;
 };
+#endif //VERTEX_LAYOUTS_HLSLI

@@ -41,15 +41,16 @@ public:
 
 };
 
+struct Object
+{
+	XMFLOAT4X4 WorldMatrix;
+};
 struct Scene
 {
 	XMFLOAT4X4 ViewMatrix;
 	XMFLOAT4X4 ProjectMatrix;
 };
-struct Object
-{
-	XMFLOAT4X4 WorldMatrix;
-};
+
 
 void MouseLook(XMFLOAT4X4 &mat, const float mouseDiff[2], float fTime);
 #endif

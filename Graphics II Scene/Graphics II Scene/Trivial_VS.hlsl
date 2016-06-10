@@ -7,23 +7,16 @@ struct INPUT_VERTEX
 
 struct OUTPUT_VERTEX
 {
-	float4 colorOut : COLOR;
 	float4 projectedCoordinate : SV_POSITION;
+	float4 colorOut : COLOR;
 };
 
-cbuffer THIS_IS_VRAM : register( b0 )
-{
-	float4 constantColor;
-	float2 constantOffset;
-	float2 padding;
-};
-
-cbuffer ROTATE : register(b1)
+cbuffer ROTATE : register(b0)
 {
 	float4x4 worldMatrix;
 };
 
-cbuffer VIEW : register(b2)
+cbuffer VIEW : register(b1)
 {
 	float4x4 viewMatrix;
 	float4x4 projectionMatrix;
