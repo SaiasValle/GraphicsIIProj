@@ -89,12 +89,15 @@
     <ClCompile Include="Camera.cpp" />
     <ClCompile Include="DDSTextureLoader.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="Model.cpp" />
     <ClCompile Include="Skybox.cpp" />
     <ClCompile Include="XTime.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Camera.h" />
     <ClInclude Include="DDSTextureLoader.h" />
+    <ClInclude Include="DEMO_APP.h" />
+    <ClInclude Include="Model.h" />
     <ClInclude Include="Skybox.h" />
     <ClInclude Include="XTime.h" />
   </ItemGroup>

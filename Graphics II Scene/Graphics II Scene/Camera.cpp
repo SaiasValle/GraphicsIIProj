@@ -14,37 +14,37 @@ void Camera::MoveCamera()
 {
 	if (GetAsyncKeyState('W') && GetAsyncKeyState(VK_SHIFT))
 	{
-		XMVECTOR move{ 0, -0.001f, 0, 1 };
+		XMVECTOR move{ 0, -0.004f, 0, 1 };
 		XMMATRIX trans = XMMatrixTranslationFromVector(move);
 		XMStoreFloat4x4(&m_CameraMat, XMMatrixMultiply(XMLoadFloat4x4(&m_CameraMat), trans));
 	}
 	if (GetAsyncKeyState('S') && GetAsyncKeyState(VK_SHIFT))
 	{
-		XMVECTOR move = { 0, 0.001f, 0, 1 };
+		XMVECTOR move = { 0, 0.004f, 0, 1 };
 		XMMATRIX trans = XMMatrixTranslationFromVector(move);
 		XMStoreFloat4x4(&m_CameraMat, XMMatrixMultiply(XMLoadFloat4x4(&m_CameraMat), trans));
 	}
 	if (GetAsyncKeyState('W'))
 	{
-		XMVECTOR move = { 0, 0, -0.001f, 1 };
+		XMVECTOR move = { 0, 0, -0.004f, 1 };
 		XMMATRIX trans = XMMatrixTranslationFromVector(move);
 		XMStoreFloat4x4(&m_CameraMat, XMMatrixMultiply(XMLoadFloat4x4(&m_CameraMat), trans));
 	}
 	if (GetAsyncKeyState('S'))
 	{
-		XMVECTOR move = { 0, 0, 0.001f, 1 };
+		XMVECTOR move = { 0, 0, 0.004f, 1 };
 		XMMATRIX trans = XMMatrixTranslationFromVector(move);
 		XMStoreFloat4x4(&m_CameraMat, XMMatrixMultiply(XMLoadFloat4x4(&m_CameraMat), trans));
 	}
 	if (GetAsyncKeyState('D'))
 	{
-		XMVECTOR move = { -0.001f, 0, 0, 1 };
+		XMVECTOR move = { -0.004f, 0, 0, 1 };
 		XMMATRIX trans = XMMatrixTranslationFromVector(move);
 		XMStoreFloat4x4(&m_CameraMat, XMMatrixMultiply(XMLoadFloat4x4(&m_CameraMat), trans));
 	}
 	if (GetAsyncKeyState('A'))
 	{
-		XMVECTOR move = { 0.001f, 0, 0, 1 };
+		XMVECTOR move = { 0.004f, 0, 0, 1 };
 		XMMATRIX trans = XMMatrixTranslationFromVector(move);
 		XMStoreFloat4x4(&m_CameraMat, XMMatrixMultiply(XMLoadFloat4x4(&m_CameraMat), trans));
 	}
@@ -66,38 +66,30 @@ void Camera::RotateCamera()
 	if (GetAsyncKeyState(VK_RBUTTON))
 	{
 #if 1
-		XMMATRIX camera_mat = XMLoadFloat4x4(&m_CameraMat);
-		XMFLOAT3 xaxis(1, 0, 0);
-		XMFLOAT3 yaxis(0, 1, 0);
-		XMFLOAT3 zaxis(0, 0, 1);
+		XMMATRIX camera_mat = XMLoadFloat4x4(&m_CameraMat); //XMMatrixInverse(0, XMLoadFloat4x4(&m_CameraMat));
+		//XMFLOAT3 position;
+		//position.x = camera_mat.r[3].m128_f32[0];
+		//position.y = camera_mat.r[3].m128_f32[1];
+		//position.z = camera_mat.r[3].m128_f32[2];
+
+		//XMFLOAT3 yaxis(0, 1, 0);
+		//XMFLOAT3 zaxis(0, 0, 1);
 
 		// Up & Down
-		XMMATRIX rotate = XMMatrixRotationX(mouseDiff[1] * 0.0003f);
+		XMMATRIX rotate = XMMatrixRotationX(mouseDiff[1] * MOUSE_SPEED_MODIFIER);
 		camera_mat = XMMatrixMultiply(camera_mat, rotate);
 
 		// Right & Left
-		rotate = XMMatrixRotationY(mouseDiff[0] * 0.0003f);
+		rotate = XMMatrixRotationY(mouseDiff[0] * MOUSE_SPEED_MODIFIER);
 		camera_mat = XMMatrixMultiply(camera_mat, rotate);
 
-		//// Rebuild Matrix
-		//newcamera_mat = camera_mat;
-		//// Z-axis
-		//zaxis = camera_mat.r[3];
-		//newcamera_mat.r[3] = zaxis;
-		//newcamera_mat.r[3] = XMVector3Normalize(zaxis);
-		//// Temp Y-axis
-		//yaxis = { 0, 1, 0 };
-		//// X-axis
-		//xaxis = XMVector3Cross(yaxis, zaxis);
-		//newcamera_mat.r[0] = xaxis;
-		//newcamera_mat.r[0] = XMVector3Normalize(xaxis);
-		//// Real Y-axis
-		//yaxis = XMVector3Cross(zaxis, xaxis);
-		//newcamera_mat.r[2] = yaxis;
-		//newcamera_mat.r[2] = XMVector3Normalize(yaxis);
+		// Rebuild Matrix
+		//camera_mat.r[3].m128_f32[0] = position.x;
+		//camera_mat.r[3].m128_f32[1] = position.y;
+		//camera_mat.r[3].m128_f32[2] = position.z;
+		//camera_mat = XMMatrixInverse(0, camera_mat);
 
 		XMStoreFloat4x4(&m_CameraMat, camera_mat);
-		//zaxis = XMVector3Cross()
 	}
 #endif
 

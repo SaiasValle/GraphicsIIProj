@@ -15,9 +15,9 @@ using namespace DirectX;
 #pragma comment(lib,"d3d11.lib")
 #include <d3d11.h>
 
-#define BACKBUFFER_WIDTH	500
-#define BACKBUFFER_HEIGHT	500
-#define MOUSE_LOOK_SPEED_MODIFIER 0.0025f
+#define BACKBUFFER_WIDTH	1000
+#define BACKBUFFER_HEIGHT	1000
+#define MOUSE_SPEED_MODIFIER 0.0003f
 
 // Camera Control class
 class Camera
@@ -50,7 +50,6 @@ struct Scene
 	XMFLOAT4X4 ViewMatrix;
 	XMFLOAT4X4 ProjectMatrix;
 };
-
 
 void MouseLook(XMFLOAT4X4 &mat, const float mouseDiff[2], float fTime);
 #endif

@@ -12,118 +12,7 @@
 //************************************************************
 //************ INCLUDES & DEFINES ****************************
 //************************************************************
-#include "Object.h"
-#include "XTime.h"
-#include "DDSTextureLoader.h"
-#include <atlbase.h>
-
-
-// Shaders
-#include "Trivial_VS.csh"
-#include "Trivial_PS.csh"
-#include "Skybox_VS.csh"
-#include "Skybox_PS.csh"
-
-
-#define RELEASE(point) { if(point) { point->Release(); point = nullptr; } }
-#define CHECK(HR) { assert(HR == S_OK); }
-
-//************************************************************
-//************ SIMPLE WINDOWS APP CLASS **********************
-//************************************************************
-
-class DEMO_APP
-{	
-	HINSTANCE						application;
-	WNDPROC							appWndProc;
-	HWND							window;
-	// TODO: PART 1 STEP 2
-	
-	ID3D11Device *device					= nullptr;
-	ID3D11DeviceContext *devContext			= nullptr;
-	ID3D11RenderTargetView *RTV				= nullptr;
-	ID3D11DepthStencilView *DSV				= nullptr;
-	ID3D11InputLayout *input				= nullptr;
-	ID3D11Texture2D *image					= nullptr;
-	IDXGISwapChain *swapchain				= nullptr;
-	ID3D11RasterizerState *RastState		= nullptr;
-	ID3D11RasterizerState *RastStatetoggled = nullptr;
-	D3D11_VIEWPORT viewport;
-	D3D11_VIEWPORT viewportR;
-	DXGI_SWAP_CHAIN_DESC swapDesc;
-
-	// Skybox
-	Object Skybox;
-	ID3D11InputLayout *Skyboxinput  = nullptr;
-	ID3D11Texture2D *Skytexture		= nullptr;
-	ID3D11ShaderResourceView *SkySRV = nullptr;
-	ID3D11DepthStencilView *SkyDSV	= nullptr;
-	ID3D11Texture2D *SkyZbuffer		= nullptr;
-	ID3D11Buffer *SkyVbuffer		= nullptr;
-	ID3D11Buffer *SkyCbuffer		= nullptr;
-	ID3D11Buffer *SkyIbuffer		= nullptr;
-
-	// Other
-	XTime clock;
-	Camera camera;
-	Scene scene;
-	Object star;
-	Object ground;
-
-	// Shaders
-	ID3D11VertexShader *VertShader	  = nullptr;
-	ID3D11PixelShader *PixelShader	  = nullptr;
-	ID3D11VertexShader *SkyboxVShader = nullptr;
-	ID3D11PixelShader *SkyboxPShader  = nullptr;
-	
-	// Star Buffers
-	ID3D11Buffer *StarVbuffer		= nullptr;
-	ID3D11Buffer *StarCbuffer		= nullptr;
-	ID3D11Buffer *StarIndexbuff;
-
-	// Ground Buffers
-	ID3D11Buffer *GroundVbuff		= nullptr;
-	ID3D11Buffer *GroundCbuff		= nullptr;
-	ID3D11Buffer *GndIndexbuff;
-
-	// Scene buffer
-	ID3D11Buffer *Scenebuff;
-	// Z buffer
-	ID3D11Texture2D *Zbuffer;
-
-public:
-	struct SIMPLE_VERTEX
-	{
-		float x, y, z, w;
-		float color[4];
-		float uvw[3];
-		float normal[3];
-	};
-	vector<SIMPLE_VERTEX> starverts;
-	vector<SIMPLE_VERTEX> groundverts;
-	vector<SIMPLE_VERTEX> skyboxverts;
-
-	DEMO_APP(HINSTANCE hinst, WNDPROC proc);
-	bool Run();
-	bool ShutDown();
-	void Resize(int width, int height);
-	void SetProjectionMatrix();
-	// Star/Ground
-	void SetStarMat(float Time);
-	void CreateStar();
-	void CreateGround();
-	void CreateSkybox();
-	// Set Buffers
-	void Initialize();
-	template <typename Type>
-	void SetVertBuffer(ID3D11Buffer **vertbuff, vector<Type> verts);
-	template <typename Type>
-	void SetIndexBuffer(ID3D11Buffer **indexbuff, vector<Type> verts);
-	// Sets Swapchain & Creates Viewport
-	void SetSwapChain();
-	// Draw
-	void Draw(Object *obj, ID3D11Buffer **vertbuff, ID3D11Buffer *indexbuff, ID3D11Buffer *constbuff, unsigned int numindices);
-};
+#include "DEMO_APP.h"
 
 //************************************************************
 //************ CREATION OF OBJECTS & RESOURCES ***************
@@ -159,16 +48,13 @@ DEMO_APP::DEMO_APP(HINSTANCE hinst, WNDPROC proc)
 	
 	// ViewPort & SwapChain
 	SetSwapChain();
-	// Creating Star
+	// Creating Star, Ground, Skybox
 #if 1
-
 	CreateStar();
 	CreateGround();
 	CreateSkybox();
 #endif
-
-	
-	// Set Buffers (Index, Constant, etc.)
+	// Set Buffers (Zbuffer, Constant, etc.)
 	Initialize();
 
 	// Standard Vertex Layout
@@ -197,7 +83,7 @@ DEMO_APP::DEMO_APP(HINSTANCE hinst, WNDPROC proc)
 	CHECK(device->CreateInputLayout(SkyboxVLayout, ARRAYSIZE(SkyboxVLayout), Skybox_VS, sizeof(Skybox_VS), &Skyboxinput));
 
 	// Skybox Texture
-	CHECK(CreateDDSTextureFromFile(device, L"HW_City.dds", nullptr, &SkySRV));
+	CHECK(CreateDDSTextureFromFile(device, L"City.dds", nullptr, &SkySRV));
 
 	// Set Projection Matrix
 	SetProjectionMatrix();
@@ -241,11 +127,43 @@ bool DEMO_APP::Run()
 
 	// Scene
 	size = sizeof(Scene);
-	devContext->Map(Scenebuff, 0, D3D11_MAP_WRITE_DISCARD, 0, &map);
+	devContext->Map(SceneCbuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &map);
 	memcpy(map.pData, &scene, size);
-	devContext->Unmap(Scenebuff, 0);
-	devContext->VSSetConstantBuffers(1, 1, &Scenebuff);
+	devContext->Unmap(SceneCbuffer, 0);
+	devContext->VSSetConstantBuffers(1, 1, &SceneCbuffer);
 	
+
+	// Skybox
+	// Shaders
+	devContext->VSSetShader(SkyboxVShader, nullptr, 0);
+	devContext->PSSetShader(SkyboxPShader, nullptr, 0);
+	// Input Layout
+	devContext->IASetInputLayout(Skyboxinput);
+	// Texture
+	devContext->PSSetShaderResources(0, 1, &SkySRV);
+#if 1
+	XMMATRIX caminverse = XMMatrixInverse(0, XMLoadFloat4x4(&camera.GetCameraMat()));
+
+	Skybox.WorldMatrix._41 = caminverse.r[3].m128_f32[0];
+	Skybox.WorldMatrix._42 = caminverse.r[3].m128_f32[1];
+	Skybox.WorldMatrix._43 = caminverse.r[3].m128_f32[2];
+
+	size = sizeof(Object);
+	devContext->Map(SkyCbuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &map);
+	memcpy(map.pData, &Skybox, size);
+	devContext->Unmap(SkyCbuffer, 0);
+	devContext->VSSetConstantBuffers(0, 1, &SkyCbuffer);
+	// Skybox Bindings
+	size = sizeof(SIMPLE_VERTEX);
+	devContext->IASetVertexBuffers(0, 1, &SkyVbuffer, &size, &offset);
+	devContext->IASetIndexBuffer(SkyIbuffer, DXGI_FORMAT_R32_UINT, 0);
+	// Draw Skybox
+	devContext->RSSetState(RastStatetoggled);
+	devContext->DrawIndexed(36, 0, 0);
+	devContext->RSSetState(RastState);
+	devContext->ClearDepthStencilView(DSV, D3D11_CLEAR_DEPTH, 1, 0);
+#endif
+
 	// Standard Shaders
 	devContext->VSSetShader(VertShader, nullptr, 0);
 	devContext->PSSetShader(PixelShader, nullptr, 0);
@@ -280,37 +198,6 @@ bool DEMO_APP::Run()
 	devContext->DrawIndexed(36, 0, 0);
 #endif
 
-	// Skybox
-	// Skybox Shaders
-	devContext->VSSetShader(SkyboxVShader, nullptr, 0);
-	devContext->PSSetShader(SkyboxPShader, nullptr, 0);
-	// Skybox Input Layout
-	devContext->IASetInputLayout(Skyboxinput);
-	// Texture
-	devContext->PSSetShaderResources(0, 1, &SkySRV);
-#if 1
-	XMMATRIX caminverse = XMMatrixInverse(0, XMLoadFloat4x4(&camera.GetCameraMat()));
-
-	Skybox.WorldMatrix._41 = caminverse.r[3].m128_f32[0];
-	Skybox.WorldMatrix._42 = caminverse.r[3].m128_f32[1];
-	Skybox.WorldMatrix._43 = caminverse.r[3].m128_f32[2];
-
-	size = sizeof(Object);
-	devContext->Map(SkyCbuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &map);
-	memcpy(map.pData, &Skybox, size);
-	devContext->Unmap(SkyCbuffer, 0);
-	devContext->VSSetConstantBuffers(0, 1, &SkyCbuffer);
-	// Skybox Bindings
-	size = sizeof(SIMPLE_VERTEX);
-	devContext->IASetVertexBuffers(0, 1, &SkyVbuffer, &size, &offset);
-	devContext->IASetIndexBuffer(SkyIbuffer, DXGI_FORMAT_R32_UINT, 0);
-	// Draw Skybox
-	devContext->RSSetState(RastStatetoggled);
-	devContext->DrawIndexed(36, 0, 0);
-	devContext->RSSetState(RastState);
-	devContext->ClearDepthStencilView(DSV, D3D11_CLEAR_DEPTH, 1, 0);
-#endif
-
 	// TODO: PART 1 STEP 8
 	swapchain->Present(0, 0);
 
@@ -342,7 +229,7 @@ bool DEMO_APP::ShutDown()
 	RELEASE(input);
 	RELEASE(swapchain);
 	RELEASE(image);
-	RELEASE(Scenebuff);
+	RELEASE(SceneCbuffer);
 	RELEASE(Zbuffer)
 	RELEASE(StarIndexbuff);
 	RELEASE(StarCbuffer);
@@ -777,7 +664,7 @@ void DEMO_APP::Initialize()
 	ScneCbuffDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
 	ScneCbuffDesc.ByteWidth = sizeof(Scene);
 
-	CHECK(device->CreateBuffer(&ScneCbuffDesc, nullptr, &Scenebuff));
+	CHECK(device->CreateBuffer(&ScneCbuffDesc, nullptr, &SceneCbuffer));
 
 	// Z buffer
 	D3D11_TEXTURE2D_DESC ZbuffDesc;
