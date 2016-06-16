@@ -49,11 +49,15 @@ DEMO_APP::DEMO_APP(HINSTANCE hinst, WNDPROC proc)
 	// ViewPort & SwapChain
 	SetSwapChain();
 	// Creating Star, Ground, Skybox
-#if 1
 	CreateStar();
 	CreateGround();
 	CreateSkybox();
-#endif
+	// Models
+	supra.SetFileName("supra.obj");
+	supra.LoadFromFile(device);
+	supra.RotateModel(XMFLOAT3(0.0f, 180.0f, 0.0f));
+	supra.TranslateModel(XMFLOAT3(-10.0f, -1.1f, 10.0f));
+
 	// Set Buffers (Zbuffer, Constant, etc.)
 	Initialize();
 
@@ -61,7 +65,9 @@ DEMO_APP::DEMO_APP(HINSTANCE hinst, WNDPROC proc)
 	D3D11_INPUT_ELEMENT_DESC vertLayout[]
 	{
 		{ "POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
-		{ "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 }
+		{ "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+		{ "UV", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+		{ "NORMAL", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 }
 	};
 	// Skybox Vertex Layout
 	D3D11_INPUT_ELEMENT_DESC SkyboxVLayout[]
@@ -69,7 +75,6 @@ DEMO_APP::DEMO_APP(HINSTANCE hinst, WNDPROC proc)
 		{ "POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
 		{ "UVW", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 }
 	};
-
 	// ADD SHADERS TO PROJECT, SET BUILD OPTIONS & COMPILE
 	// Create Shaders
 	CHECK(device->CreateVertexShader(Trivial_VS, sizeof(Trivial_VS), nullptr, &VertShader));
@@ -131,7 +136,6 @@ bool DEMO_APP::Run()
 	memcpy(map.pData, &scene, size);
 	devContext->Unmap(SceneCbuffer, 0);
 	devContext->VSSetConstantBuffers(1, 1, &SceneCbuffer);
-	
 
 	// Skybox
 	// Shaders
@@ -197,7 +201,7 @@ bool DEMO_APP::Run()
 	// Draw Ground
 	devContext->DrawIndexed(36, 0, 0);
 #endif
-
+	supra.Draw(devContext);
 	// TODO: PART 1 STEP 8
 	swapchain->Present(0, 0);
 
@@ -244,9 +248,11 @@ bool DEMO_APP::ShutDown()
 	RELEASE(Skyboxinput);
 	RELEASE(Skytexture);
 	RELEASE(SkySRV);
-	RELEASE(SkyDSV);
 	RELEASE(RastState);
 	RELEASE(RastStatetoggled);
+	RELEASE(PlightCbuff);
+	RELEASE(DlightCbuff);
+	RELEASE(SlightCbuff);
 
 	UnregisterClass( L"DirectXApplication", application ); 
 	return true;
@@ -310,7 +316,7 @@ void DEMO_APP::SetSwapChain()
 	swapDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
 
 	// TODO: PART 1 STEP 3b
-	HRESULT hr = (D3D11CreateDeviceAndSwapChain(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, D3D11_CREATE_DEVICE_DEBUG, 0, 0, D3D11_SDK_VERSION, &swapDesc, &swapchain, &device, nullptr, &devContext));
+	CHECK(D3D11CreateDeviceAndSwapChain(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, D3D11_CREATE_DEVICE_DEBUG, 0, 0, D3D11_SDK_VERSION, &swapDesc, &swapchain, &device, nullptr, &devContext));
 
 	// TODO: PART 1 STEP 4
 	swapchain->GetBuffer(0, __uuidof(ID3D11Texture2D), (LPVOID*)&image);
@@ -437,32 +443,42 @@ void DEMO_APP::CreateGround()
 	currvert.y = -2.0f;
 	currvert.z = -16.0f;
 	currvert.w = 1.0f;
-
+	currvert.uv[0] = 0;
+	currvert.uv[1] = 1;
 	groundverts.push_back(currvert);
 
 	currvert.x = -16.0f;
 	currvert.y = -2.0f;
 	currvert.z = 16.0f;
 	currvert.w = 1.0f;
+	currvert.uv[0] = 0;
+	currvert.uv[1] = 1;
 	groundverts.push_back(currvert);
 
 	currvert.x = 16.0f;
 	currvert.y = -2.0f;
 	currvert.z = 16.0f;
 	currvert.w = 1.0f;
+	currvert.uv[0] = 0;
+	currvert.uv[1] = 1;
 	groundverts.push_back(currvert);
 
 	currvert.x = 16.0f;
 	currvert.y = -2.0f;
 	currvert.z = -16.0f;
 	currvert.w = 1.0f;
+	currvert.uv[0] = 0;
+	currvert.uv[1] = 1;
 	groundverts.push_back(currvert);
 
+#if 0
 	// Bottom Face
 	currvert.x = -16.0f;
 	currvert.y = -3.0f;
 	currvert.z = -16.0f;
 	currvert.w = 1.0f;
+	currvert.uv[0] = 0;
+	currvert.uv[1] = 1;
 	groundverts.push_back(currvert);
 
 	currvert.x = -16.0f;
@@ -482,16 +498,6 @@ void DEMO_APP::CreateGround()
 	currvert.z = -16.0f;
 	currvert.w = 1.0f;
 	groundverts.push_back(currvert);
-
-	// Colors
-	for (unsigned int i = 0; i < 4; i++)
-	{
-		for (unsigned int j = 0; j < 4; j++)
-		{
-			groundverts[i].color[j] = 0.6f;
-			groundverts[i+4].color[j] = 0.2f;
-		}
-	}
 
 	vector<unsigned int> indeces =
 	{ 0, 1, 2,
@@ -506,6 +512,20 @@ void DEMO_APP::CreateGround()
 	7, 3, 2,
 	3, 7, 0,
 	7, 4, 0};
+#endif
+	// Colors
+	for (unsigned int i = 0; i < 4; i++)
+	{
+		for (unsigned int j = 0; j < 4; j++)
+		{
+			groundverts[i].color[j] = 0.6f;
+		}
+	}
+	vector<unsigned int> indeces =
+	{ 0, 1, 2,
+	0, 2, 3,
+	0, 3, 2,
+	2, 1, 0 };
 
 	SetVertBuffer(&GroundVbuff, groundverts);
 	SetIndexBuffer(&GndIndexbuff, indeces);
@@ -627,44 +647,21 @@ void DEMO_APP::Initialize()
 	CHECK(device->CreateRasterizerState(&rasterDesc, &RastStatetoggled));
 
 	// Skybox Constant Buffer
-	D3D11_BUFFER_DESC SkyCbuffDesc;
-	ZeroMemory(&SkyCbuffDesc, sizeof(SkyCbuffDesc));
-	SkyCbuffDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-	SkyCbuffDesc.Usage = D3D11_USAGE_DYNAMIC;
-	SkyCbuffDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-	SkyCbuffDesc.ByteWidth = sizeof(Object);
-
-	CHECK(device->CreateBuffer(&SkyCbuffDesc, nullptr, &SkyCbuffer));
+	SetConstBuffer(&SkyCbuffer, Skybox);
 
 	// Star Constant Buffer
-	D3D11_BUFFER_DESC StarCbuffDesc;
-	ZeroMemory(&StarCbuffDesc, sizeof(StarCbuffDesc));
-	StarCbuffDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-	StarCbuffDesc.Usage = D3D11_USAGE_DYNAMIC;
-	StarCbuffDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-	StarCbuffDesc.ByteWidth = sizeof(Object);
-
-	CHECK(device->CreateBuffer(&StarCbuffDesc, nullptr, &StarCbuffer));
+	SetConstBuffer(&StarCbuffer, star);
 	
 	// Ground Constant Buffer
-	D3D11_BUFFER_DESC GndCbuffDesc;
-	ZeroMemory(&GndCbuffDesc, sizeof(GndCbuffDesc));
-	GndCbuffDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-	GndCbuffDesc.Usage = D3D11_USAGE_DYNAMIC;
-	GndCbuffDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-	GndCbuffDesc.ByteWidth = sizeof(Object);
-
-	CHECK(device->CreateBuffer(&GndCbuffDesc, nullptr, &GroundCbuff));
+	SetConstBuffer(&GroundCbuff, ground);
 
 	// Scene Constant Buffer (View/Projection)
-	D3D11_BUFFER_DESC ScneCbuffDesc;
-	ZeroMemory(&ScneCbuffDesc, sizeof(ScneCbuffDesc));
-	ScneCbuffDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-	ScneCbuffDesc.Usage = D3D11_USAGE_DYNAMIC;
-	ScneCbuffDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-	ScneCbuffDesc.ByteWidth = sizeof(Scene);
-
-	CHECK(device->CreateBuffer(&ScneCbuffDesc, nullptr, &SceneCbuffer));
+	SetConstBuffer(&SceneCbuffer, scene);
+	
+	// Lighting Constant Buffer
+	SetConstBuffer(&PlightCbuff, Plight);
+	SetConstBuffer(&DlightCbuff, Dlight);
+	SetConstBuffer(&SlightCbuff, Slight);
 
 	// Z buffer
 	D3D11_TEXTURE2D_DESC ZbuffDesc;
@@ -743,4 +740,17 @@ void DEMO_APP::SetIndexBuffer(ID3D11Buffer **indexBuff, vector<Type> indices)
 	IbuffDesc.StructureByteStride = 0;
 
 	CHECK(device->CreateBuffer(&IbuffDesc, &data, indexBuff));
+}
+template <typename Type>
+void DEMO_APP::SetConstBuffer(ID3D11Buffer **constbuff, Type size)
+{
+	// Constant Buffer
+	D3D11_BUFFER_DESC ConstbuffDesc;
+	ZeroMemory(&ConstbuffDesc, sizeof(ConstbuffDesc));
+	ConstbuffDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+	ConstbuffDesc.Usage = D3D11_USAGE_DYNAMIC;
+	ConstbuffDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+	ConstbuffDesc.ByteWidth = sizeof(Type);
+
+	CHECK(device->CreateBuffer(&ConstbuffDesc, nullptr, constbuff));
 }

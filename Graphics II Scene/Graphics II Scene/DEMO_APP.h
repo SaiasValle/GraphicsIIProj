@@ -9,12 +9,38 @@
 #include "Trivial_PS.csh"
 #include "Skybox_VS.csh"
 #include "Skybox_PS.csh"
+#include "Lights_PS.csh"
 
 #define RELEASE(point) { if(point) { point->Release(); point = nullptr; } }
 #define CHECK(HR) { assert(HR == S_OK); }
 //************************************************************
 //************ SIMPLE WINDOWS APP CLASS **********************
 //************************************************************
+struct PointLight
+{
+	XMFLOAT4 color;
+	XMFLOAT4 position;
+};
+struct DirectionalLight
+{
+	XMFLOAT4 direction;
+	XMFLOAT4 color;
+};
+struct SpotLight
+{
+	XMFLOAT4 position;
+	XMFLOAT4 direction;
+	XMFLOAT4 color;
+	XMFLOAT4 spot;
+	XMFLOAT4 camera;
+};
+struct SIMPLE_VERTEX
+{
+	float x, y, z, w;
+	float color[4];
+	float uv[2];
+	float normal[3];
+};
 
 class DEMO_APP
 {
@@ -37,12 +63,19 @@ public:
 	D3D11_VIEWPORT viewportR;
 	DXGI_SWAP_CHAIN_DESC swapDesc;
 
+	// Lighting
+	PointLight Plight;
+	ID3D11Buffer *PlightCbuff;
+	DirectionalLight Dlight;
+	ID3D11Buffer *DlightCbuff;
+	SpotLight Slight;
+	ID3D11Buffer *SlightCbuff;
+
 	// Skybox
 	Object Skybox;
 	ID3D11InputLayout *Skyboxinput = nullptr;
 	ID3D11Texture2D *Skytexture = nullptr;
 	ID3D11ShaderResourceView *SkySRV = nullptr;
-	ID3D11DepthStencilView *SkyDSV = nullptr;
 	ID3D11Texture2D *SkyZbuffer = nullptr;
 	ID3D11Buffer *SkyVbuffer = nullptr;
 	ID3D11Buffer *SkyCbuffer = nullptr;
@@ -54,6 +87,7 @@ public:
 	Scene scene;
 	Object star;
 	Object ground;
+	Model supra;
 
 	// Shaders
 	ID3D11VertexShader *VertShader = nullptr;
@@ -76,13 +110,6 @@ public:
 	// Z buffer
 	ID3D11Texture2D *Zbuffer;
 
-	struct SIMPLE_VERTEX
-	{
-		float x, y, z, w;
-		float color[4];
-		float uvw[3];
-		float normal[3];
-	};
 	vector<SIMPLE_VERTEX> starverts;
 	vector<SIMPLE_VERTEX> groundverts;
 	vector<SIMPLE_VERTEX> skyboxverts;
@@ -107,6 +134,8 @@ public:
 	void SetVertBuffer(ID3D11Buffer **vertbuff, vector<Type> verts);
 	template <typename Type>
 	void SetIndexBuffer(ID3D11Buffer **indexbuff, vector<Type> verts);
+	template <typename Type>
+	void SetConstBuffer(ID3D11Buffer **constbuff, Type size);
 	// Sets Swapchain & Creates Viewport
 	void SetSwapChain();
 	// Draw

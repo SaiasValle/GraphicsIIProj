@@ -26,13 +26,13 @@ void Camera::MoveCamera()
 	}
 	if (GetAsyncKeyState('W'))
 	{
-		XMVECTOR move = { 0, 0, -0.004f, 1 };
+		XMVECTOR move = { 0, 0, -0.005f, 1 };
 		XMMATRIX trans = XMMatrixTranslationFromVector(move);
 		XMStoreFloat4x4(&m_CameraMat, XMMatrixMultiply(XMLoadFloat4x4(&m_CameraMat), trans));
 	}
 	if (GetAsyncKeyState('S'))
 	{
-		XMVECTOR move = { 0, 0, 0.004f, 1 };
+		XMVECTOR move = { 0, 0, 0.005f, 1 };
 		XMMATRIX trans = XMMatrixTranslationFromVector(move);
 		XMStoreFloat4x4(&m_CameraMat, XMMatrixMultiply(XMLoadFloat4x4(&m_CameraMat), trans));
 	}

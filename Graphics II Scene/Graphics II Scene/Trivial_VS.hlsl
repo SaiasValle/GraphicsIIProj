@@ -3,12 +3,15 @@ struct INPUT_VERTEX
 {
 	float4 coordinate : POSITION;
 	float4 color : COLOR;
+	float2 uv : UV;
+	float3 normal : NORMAL;
 };
 
 struct OUTPUT_VERTEX
 {
 	float4 projectedCoordinate : SV_POSITION;
 	float4 colorOut : COLOR;
+	float3 uvOut : UV;
 };
 
 cbuffer ROTATE : register(b0)
@@ -29,14 +32,9 @@ OUTPUT_VERTEX main( INPUT_VERTEX fromVertexBuffer )
 	position = mul(position, viewMatrix);
 	position = mul(position, projectionMatrix);
 	
-	sendToRasterizer.projectedCoordinate.xyzw = position;
-		
-	// TODO : PART 4 STEP 4
-	/*sendToRasterizer.projectedCoordinate.xy += constantOffset;*/
-	
-	// TODO : PART 3 STEP 7
+	sendToRasterizer.projectedCoordinate.xyzw = position;	
 	sendToRasterizer.colorOut = fromVertexBuffer.color;
-	// END PART 3
+	sendToRasterizer.uvOut = fromVertexBuffer.coordinate.xyz;
 
 	return sendToRasterizer;
 }

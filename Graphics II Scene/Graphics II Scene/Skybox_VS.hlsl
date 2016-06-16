@@ -36,8 +36,6 @@ OUTPUT_VERTEX main(INPUT_VERTEX input)
 	sendToRasterizer.pos.xyzw = position;
 	sendToRasterizer.textureCoord = input.coordinate.xyz;
 
-	// sendToRasterizer.colorOut = fromVertexBuffer.color;
-
 	return sendToRasterizer;
 }
 
