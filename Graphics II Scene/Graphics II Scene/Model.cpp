@@ -8,17 +8,12 @@ Model::Model()
 
 Model::~Model()
 {
-	if (Vertbuffer && Indexbuffer)
+	if (Vertbuffer && Indexbuffer && m_SRV)
 	{
-		Vertbuffer->Release();
-		Indexbuffer->Release();
-		Constbuffer->Release();
-	}
-	if (m_texture && m_SRV && m_DSV)
-	{
-		m_texture->Release();
-		m_SRV->Release();
-		m_DSV->Release();
+		RELEASE(Vertbuffer);
+		RELEASE(Indexbuffer);
+		RELEASE(Constbuffer);
+		RELEASE(m_SRV);
 	}
 }
 
@@ -51,10 +46,9 @@ void Model::ScaleModel(XMFLOAT3 scale)
 
 	XMStoreFloat4x4(&ObjModel.WorldMatrix, worldmat);
 }
-void Model::LoadTextureDDS(string textureName, ID3D11Device *device)
+void Model::LoadTextureDDS(wchar_t *textureName, ID3D11Device *device)
 {
-	
-	//CHECK(CreateDDSTextureFromFile(device, textureName.c_str(), nullptr, &m_SRV));
+	CHECK(CreateDDSTextureFromFile(device, textureName, nullptr, &m_SRV));
 }
 void Model::LoadTextureMTL(string textureName, ID3D11Device *device)
 {
@@ -137,7 +131,7 @@ void Model::LoadFromFile(ID3D11Device *device)
 			tempVert.color[2] = 0.0f;
 
 			tempVert.uv[0] = uv[uvIndex[i] - 1].x;
-			tempVert.uv[1] = uv[uvIndex[i] - 1].y;
+			tempVert.uv[1] = 1 - uv[uvIndex[i] - 1].y;
 
 			tempVert.normal[0] = normals[normIndex[i] - 1].x;
 			tempVert.normal[1] = normals[normIndex[i] - 1].y;
@@ -201,20 +195,26 @@ void Model::Initialize(ID3D11Device *device, ID3D11Buffer **vertbuff, vector<Typ
 }
 void Model::Draw(ID3D11DeviceContext *device)
 {
-	unsigned int size = sizeof(Scene);
+	unsigned int size;
 	unsigned int offset = 0;
 	D3D11_MAPPED_SUBRESOURCE map;
-
+	// Constant Buffer
 	size = sizeof(Object);
 	device->Map(Constbuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &map);
 	memcpy(map.pData, &ObjModel, size);
 	device->Unmap(Constbuffer, 0);
 	device->VSSetConstantBuffers(0, 1, &Constbuffer);
-	
+	// Vertex Buffer
 	size = sizeof(SIMPLE_VERTEX);
 	device->IASetVertexBuffers(0, 1, &Vertbuffer, &size, &offset);
 	device->IASetIndexBuffer(Indexbuffer, DXGI_FORMAT_R32_UINT, offset);
-	
+	// Topology
 	device->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	// Texture
+	if (m_SRV)
+	{
+		device->PSSetShaderResources(0, 1, &m_SRV);
+	}
+
 	device->DrawIndexed(numIndices, 0, 0);
 }

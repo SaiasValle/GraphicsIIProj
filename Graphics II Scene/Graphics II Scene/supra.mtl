@@ -8,7 +8,7 @@ Ka 0.588235 0.588235 0.588235
 Kd 0.588235 0.588235 0.588235
 Ks 0.675000 0.675000 0.675000
 Ns 42.224243
-map_Kd kalodki.png
+map_Kd kalodki.dds
 
 newmtl _disk
 illum 2

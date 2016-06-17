@@ -53,21 +53,26 @@ DEMO_APP::DEMO_APP(HINSTANCE hinst, WNDPROC proc)
 	CreateGround();
 	CreateSkybox();
 	// Models
-	supra.SetFileName("supra.obj");
-	supra.LoadFromFile(device);
-	supra.RotateModel(XMFLOAT3(0.0f, 180.0f, 0.0f));
-	supra.TranslateModel(XMFLOAT3(-10.0f, -1.1f, 10.0f));
+	vette.SetFileName("corvette.obj");
+	vette.LoadFromFile(device);
+	vette.LoadTextureDDS(L"vette.dds", device);
+	vette.RotateModel(XMFLOAT3(0.0f, 180.0f, 0.0f));
+	vette.TranslateModel(XMFLOAT3(-10.0f, -1.1f, 10.0f));
+
+	//vette.ScaleModel(XMFLOAT3(0.5f, 0.5f, 0.5f));
 
 	// Set Buffers (Zbuffer, Constant, etc.)
 	Initialize();
+	InitializeLights();
 
 	// Standard Vertex Layout
 	D3D11_INPUT_ELEMENT_DESC vertLayout[]
 	{
 		{ "POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
 		{ "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
-		{ "UV", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
-		{ "NORMAL", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 }
+		{ "UV", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+		{ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+		{ "COORD", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 }
 	};
 	// Skybox Vertex Layout
 	D3D11_INPUT_ELEMENT_DESC SkyboxVLayout[]
@@ -82,13 +87,16 @@ DEMO_APP::DEMO_APP(HINSTANCE hinst, WNDPROC proc)
 	// Sky
 	CHECK(device->CreateVertexShader(Skybox_VS, sizeof(Skybox_VS), nullptr, &SkyboxVShader));
 	CHECK(device->CreatePixelShader(Skybox_PS, sizeof(Skybox_PS), nullptr, &SkyboxPShader));
+	// Lighting
+	CHECK(device->CreatePixelShader(Lights_PS, sizeof(Lights_PS), nullptr, &LightingPS));
 
 	// Create Input Layouts
 	CHECK(device->CreateInputLayout(vertLayout, ARRAYSIZE(vertLayout), Trivial_VS, sizeof(Trivial_VS), &input));
 	CHECK(device->CreateInputLayout(SkyboxVLayout, ARRAYSIZE(SkyboxVLayout), Skybox_VS, sizeof(Skybox_VS), &Skyboxinput));
 
-	// Skybox Texture
+	// Textures
 	CHECK(CreateDDSTextureFromFile(device, L"City.dds", nullptr, &SkySRV));
+	CHECK(CreateDDSTextureFromFile(device, L"ground.dds", nullptr, &GroundSRV));
 
 	// Set Projection Matrix
 	SetProjectionMatrix();
@@ -102,9 +110,8 @@ DEMO_APP::DEMO_APP(HINSTANCE hinst, WNDPROC proc)
 
 bool DEMO_APP::Run()
 {
-	float time = (float)clock.TotalTime();
 	// Set Star Matrix	
-	SetStarMat(time);
+	SetStarMat((float)clock.TotalTime());
 
 	// Camera Movement
 	camera.SetCameraMat(scene.ViewMatrix);
@@ -138,6 +145,7 @@ bool DEMO_APP::Run()
 	devContext->VSSetConstantBuffers(1, 1, &SceneCbuffer);
 
 	// Skybox
+#if 1
 	// Shaders
 	devContext->VSSetShader(SkyboxVShader, nullptr, 0);
 	devContext->PSSetShader(SkyboxPShader, nullptr, 0);
@@ -145,7 +153,7 @@ bool DEMO_APP::Run()
 	devContext->IASetInputLayout(Skyboxinput);
 	// Texture
 	devContext->PSSetShaderResources(0, 1, &SkySRV);
-#if 1
+
 	XMMATRIX caminverse = XMMatrixInverse(0, XMLoadFloat4x4(&camera.GetCameraMat()));
 
 	Skybox.WorldMatrix._41 = caminverse.r[3].m128_f32[0];
@@ -167,12 +175,36 @@ bool DEMO_APP::Run()
 	devContext->RSSetState(RastState);
 	devContext->ClearDepthStencilView(DSV, D3D11_CLEAR_DEPTH, 1, 0);
 #endif
-
 	// Standard Shaders
 	devContext->VSSetShader(VertShader, nullptr, 0);
-	devContext->PSSetShader(PixelShader, nullptr, 0);
+	devContext->PSSetShader(LightingPS, nullptr, 0);
 	// Standard Input Layout
 	devContext->IASetInputLayout(input);
+	// Lighting
+#if 1
+	// Point Light Constant Buffer
+	size = sizeof(PointLight);
+	devContext->Map(PlightCbuff, 0, D3D11_MAP_WRITE_DISCARD, 0, &map);
+	memcpy(map.pData, &Plight, size);
+	devContext->Unmap(PlightCbuff, 0);
+	devContext->PSSetConstantBuffers(1, 1, &PlightCbuff);
+	// Direction Light Constant Buffer
+	size = sizeof(DirectionalLight);
+	devContext->Map(DlightCbuff, 0, D3D11_MAP_WRITE_DISCARD, 0, &map);
+	memcpy(map.pData, &Dlight, size);
+	devContext->Unmap(DlightCbuff, 0);
+	devContext->PSSetConstantBuffers(2, 1, &DlightCbuff);
+	// Spot Light Constant Buffer
+	size = sizeof(SpotLight);
+	devContext->Map(SlightCbuff, 0, D3D11_MAP_WRITE_DISCARD, 0, &map);
+	memcpy(map.pData, &Slight, size);
+	devContext->Unmap(SlightCbuff, 0);
+	devContext->PSSetConstantBuffers(3, 1, &SlightCbuff);
+
+	ToggleLights();
+	MovePointLight();
+#endif
+	devContext->PSSetShader(PixelShader, nullptr, 0);
 	// Object (Star)
 #if 1
 	size = sizeof(Object);
@@ -189,6 +221,10 @@ bool DEMO_APP::Run()
 #endif
 	// Object (Ground)
 #if 1
+	// Texture
+	devContext->PSSetShader(LightingPS, nullptr, 0);
+	devContext->PSSetShaderResources(0, 1, &GroundSRV);
+
 	size = sizeof(Object);
 	devContext->Map(GroundCbuff, 0, D3D11_MAP_WRITE_DISCARD, 0, &map);
 	memcpy(map.pData, &ground, size);
@@ -199,10 +235,11 @@ bool DEMO_APP::Run()
 	devContext->IASetVertexBuffers(0, 1, &GroundVbuff, &size, &offset);
 	devContext->IASetIndexBuffer(GndIndexbuff, DXGI_FORMAT_R32_UINT, 0);
 	// Draw Ground
-	devContext->DrawIndexed(36, 0, 0);
+	devContext->DrawIndexed(12, 0, 0);
 #endif
-	supra.Draw(devContext);
-	// TODO: PART 1 STEP 8
+	// Models
+	vette.Draw(devContext);
+
 	swapchain->Present(0, 0);
 
 	clock.Signal();
@@ -230,6 +267,7 @@ bool DEMO_APP::ShutDown()
 	RELEASE(PixelShader);
 	RELEASE(SkyboxVShader);
 	RELEASE(SkyboxPShader);
+	RELEASE(LightingPS);
 	RELEASE(input);
 	RELEASE(swapchain);
 	RELEASE(image);
@@ -241,12 +279,12 @@ bool DEMO_APP::ShutDown()
 	RELEASE(GndIndexbuff);
 	RELEASE(GroundCbuff);
 	RELEASE(GroundVbuff);
+	RELEASE(GroundSRV);
 	RELEASE(SkyZbuffer);
 	RELEASE(SkyVbuffer);
 	RELEASE(SkyCbuffer);
 	RELEASE(SkyIbuffer);
 	RELEASE(Skyboxinput);
-	RELEASE(Skytexture);
 	RELEASE(SkySRV);
 	RELEASE(RastState);
 	RELEASE(RastStatetoggled);
@@ -367,6 +405,9 @@ void DEMO_APP::CreateStar()
 	currvert.color[1] = 1.0f;
 	currvert.color[2] = 0.0f;
 	currvert.color[3] = 1.0f;
+	currvert.normal[0] = 0.0f;
+	currvert.normal[1] = 0.0f;
+	currvert.normal[2] = 1.0f;
 	starverts.push_back(currvert);
 
 	for (int i = 0; i < 360; i += 36, index++)
@@ -381,6 +422,9 @@ void DEMO_APP::CreateStar()
 		currvert.color[1] = 0.0f;
 		currvert.color[2] = 0.0f;
 		currvert.color[3] = 1.0f;
+		currvert.normal[0] = 0.0f;
+		currvert.normal[1] = 1.0f;
+		currvert.normal[2] = 0.0f;
 		// Inner Vertices
 		if (index % 2 == 0)
 		{
@@ -390,6 +434,9 @@ void DEMO_APP::CreateStar()
 			currvert.color[1] = 0.0f;
 			currvert.color[2] = 0.0f;
 			currvert.color[3] = 1.0f;
+			currvert.normal[0] = 0.0f;
+			currvert.normal[1] = -1.0f;
+			currvert.normal[2] = 0.0f;
 		}
 		starverts.push_back(currvert);
 	}
@@ -403,6 +450,9 @@ void DEMO_APP::CreateStar()
 	currvert.color[1] = 1.0f;
 	currvert.color[2] = 0.0f;
 	currvert.color[3] = 1.0f;
+	currvert.normal[0] = 0.0f;
+	currvert.normal[1] = 0.0f;
+	currvert.normal[2] = -1.0f;
 	starverts.push_back(currvert);
 
 	vector<unsigned int> starindeces =
@@ -445,6 +495,9 @@ void DEMO_APP::CreateGround()
 	currvert.w = 1.0f;
 	currvert.uv[0] = 0;
 	currvert.uv[1] = 1;
+	currvert.normal[0] = 0.0f;
+	currvert.normal[1] = 1.0f;
+	currvert.normal[2] = 0.0f;
 	groundverts.push_back(currvert);
 
 	currvert.x = -16.0f;
@@ -452,25 +505,40 @@ void DEMO_APP::CreateGround()
 	currvert.z = 16.0f;
 	currvert.w = 1.0f;
 	currvert.uv[0] = 0;
-	currvert.uv[1] = 1;
+	currvert.uv[1] = 0;
+	currvert.normal[0] = 0.0f;
+	currvert.normal[1] = 1.0f;
+	currvert.normal[2] = 0.0f;
 	groundverts.push_back(currvert);
 
 	currvert.x = 16.0f;
 	currvert.y = -2.0f;
 	currvert.z = 16.0f;
 	currvert.w = 1.0f;
-	currvert.uv[0] = 0;
-	currvert.uv[1] = 1;
+	currvert.uv[0] = 1;
+	currvert.uv[1] = 0;
+	currvert.normal[0] = 0.0f;
+	currvert.normal[1] = 1.0f;
+	currvert.normal[2] = 0.0f;
 	groundverts.push_back(currvert);
 
 	currvert.x = 16.0f;
 	currvert.y = -2.0f;
 	currvert.z = -16.0f;
 	currvert.w = 1.0f;
-	currvert.uv[0] = 0;
+	currvert.uv[0] = 1;
 	currvert.uv[1] = 1;
+	currvert.normal[0] = 0.0f;
+	currvert.normal[1] = 1.0f;
+	currvert.normal[2] = 0.0f;
 	groundverts.push_back(currvert);
 
+	for (int i = 0; i < 4; i++)
+	{
+		currvert = groundverts[i];
+		currvert.normal[1] = -1.0f;
+		groundverts.push_back(currvert);
+	}
 #if 0
 	// Bottom Face
 	currvert.x = -16.0f;
@@ -524,8 +592,8 @@ void DEMO_APP::CreateGround()
 	vector<unsigned int> indeces =
 	{ 0, 1, 2,
 	0, 2, 3,
-	0, 3, 2,
-	2, 1, 0 };
+	4, 7, 6,
+	6, 5, 4 };
 
 	SetVertBuffer(&GroundVbuff, groundverts);
 	SetIndexBuffer(&GndIndexbuff, indeces);
@@ -678,6 +746,79 @@ void DEMO_APP::Initialize()
 
 	CHECK(device->CreateTexture2D(&ZbuffDesc, 0, &Zbuffer));
 	CHECK(device->CreateDepthStencilView(Zbuffer, nullptr, &DSV));
+}
+void DEMO_APP::InitializeLights()
+{
+	// Point Light
+	Plight.color = XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f);
+	Plight.position = XMFLOAT4(0.0f, -1.0f, 5.0f, 0.0f);
+	// Directional Light
+	Dlight.color = XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f);
+	Dlight.direction = XMFLOAT4(0.0f, -1.0f, 0.0f, 0.0f);
+	// Spot Light
+	Slight.color = XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f);
+	Slight.position = XMFLOAT4(0.0f, 8.0f, 0.0f, 0.0f);
+	Slight.direction = XMFLOAT4(0.0f, -1.0f, 0.0f, 0.0f);
+	Slight.spotRatio.x = 0.98f;
+	Slight.spotRatio.y = 0.9f;
+}
+void DEMO_APP::ToggleLights()
+{
+	// Point Light
+	if (GetAsyncKeyState('1') & 0x1)
+	{
+		if (Plight.color.x <= 0.0f)
+			Plight.color = XMFLOAT4(0.6f, 0.6f, 1.0f, 1.0f);
+		else if (Plight.color.x >= 0.1f)
+			Plight.color = XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f);
+	}
+	// Directional Light
+	if (GetAsyncKeyState('2') & 0x1)
+	{
+		if (Dlight.color.w <= 0.0f)
+			Dlight.color = XMFLOAT4(0.6f, 0.6f, 0.4f, 1.0f);
+		else if (Dlight.color.w >= 0.1f)
+			Dlight.color = XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f);
+	}
+	// Spot Light
+	if (GetAsyncKeyState('3') & 0x1)
+	{
+		if (Slight.color.w <= 0.0f)
+			Slight.color = XMFLOAT4(1.0f, 1.0f, 0.0f, 1.0f);
+		else if (Slight.color.w >= 0.1f)
+			Slight.color = XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f);
+	}
+}
+void DEMO_APP::MovePointLight()
+{
+	if (GetAsyncKeyState('I') & 0x1)
+	{
+		Plight.position.z += 0.7f;
+	}
+	if (GetAsyncKeyState('K') & 0x1)
+	{
+		Plight.position.z += -0.7f;
+	}
+	if (GetAsyncKeyState('J') & 0x1)
+	{
+		Plight.position.x += -0.7f;
+	}
+	if (GetAsyncKeyState('L') & 0x1)
+	{
+		Plight.position.x += 0.7f;
+	}
+	if (GetAsyncKeyState('I') && GetAsyncKeyState(VK_SHIFT))
+	{
+		Plight.position.y += 0.02f;
+	}
+	if (GetAsyncKeyState('K') && GetAsyncKeyState(VK_SHIFT))
+	{
+		Plight.position.y -= 0.02f;
+	}
+	if (GetAsyncKeyState('P'))
+	{
+		Plight.position = XMFLOAT4(0.0f, -1.0f, 0.0f, 0.0f);
+	}
 }
 void DEMO_APP::Draw(Object *obj, ID3D11Buffer **vertbuff, ID3D11Buffer *indexbuff, ID3D11Buffer *constbuff, unsigned int numindices)
 {

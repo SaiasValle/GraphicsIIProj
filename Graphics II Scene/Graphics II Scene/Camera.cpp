@@ -14,37 +14,37 @@ void Camera::MoveCamera()
 {
 	if (GetAsyncKeyState('W') && GetAsyncKeyState(VK_SHIFT))
 	{
-		XMVECTOR move{ 0, -0.004f, 0, 1 };
+		XMVECTOR move{ 0, -0.01f, 0, 1 };
 		XMMATRIX trans = XMMatrixTranslationFromVector(move);
 		XMStoreFloat4x4(&m_CameraMat, XMMatrixMultiply(XMLoadFloat4x4(&m_CameraMat), trans));
 	}
 	if (GetAsyncKeyState('S') && GetAsyncKeyState(VK_SHIFT))
 	{
-		XMVECTOR move = { 0, 0.004f, 0, 1 };
+		XMVECTOR move = { 0, 0.01f, 0, 1 };
 		XMMATRIX trans = XMMatrixTranslationFromVector(move);
 		XMStoreFloat4x4(&m_CameraMat, XMMatrixMultiply(XMLoadFloat4x4(&m_CameraMat), trans));
 	}
 	if (GetAsyncKeyState('W'))
 	{
-		XMVECTOR move = { 0, 0, -0.005f, 1 };
+		XMVECTOR move = { 0, 0, -0.01f, 1 };
 		XMMATRIX trans = XMMatrixTranslationFromVector(move);
 		XMStoreFloat4x4(&m_CameraMat, XMMatrixMultiply(XMLoadFloat4x4(&m_CameraMat), trans));
 	}
 	if (GetAsyncKeyState('S'))
 	{
-		XMVECTOR move = { 0, 0, 0.005f, 1 };
+		XMVECTOR move = { 0, 0, 0.01f, 1 };
 		XMMATRIX trans = XMMatrixTranslationFromVector(move);
 		XMStoreFloat4x4(&m_CameraMat, XMMatrixMultiply(XMLoadFloat4x4(&m_CameraMat), trans));
 	}
 	if (GetAsyncKeyState('D'))
 	{
-		XMVECTOR move = { -0.004f, 0, 0, 1 };
+		XMVECTOR move = { -0.01f, 0, 0, 1 };
 		XMMATRIX trans = XMMatrixTranslationFromVector(move);
 		XMStoreFloat4x4(&m_CameraMat, XMMatrixMultiply(XMLoadFloat4x4(&m_CameraMat), trans));
 	}
 	if (GetAsyncKeyState('A'))
 	{
-		XMVECTOR move = { 0.004f, 0, 0, 1 };
+		XMVECTOR move = { 0.01f, 0, 0, 1 };
 		XMMATRIX trans = XMMatrixTranslationFromVector(move);
 		XMStoreFloat4x4(&m_CameraMat, XMMatrixMultiply(XMLoadFloat4x4(&m_CameraMat), trans));
 	}

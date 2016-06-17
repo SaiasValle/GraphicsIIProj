@@ -31,7 +31,7 @@ struct SpotLight
 	XMFLOAT4 position;
 	XMFLOAT4 direction;
 	XMFLOAT4 color;
-	XMFLOAT4 spot;
+	XMFLOAT4 spotRatio;
 	XMFLOAT4 camera;
 };
 struct SIMPLE_VERTEX
@@ -74,7 +74,6 @@ public:
 	// Skybox
 	Object Skybox;
 	ID3D11InputLayout *Skyboxinput = nullptr;
-	ID3D11Texture2D *Skytexture = nullptr;
 	ID3D11ShaderResourceView *SkySRV = nullptr;
 	ID3D11Texture2D *SkyZbuffer = nullptr;
 	ID3D11Buffer *SkyVbuffer = nullptr;
@@ -87,23 +86,25 @@ public:
 	Scene scene;
 	Object star;
 	Object ground;
-	Model supra;
+	Model vette;
 
 	// Shaders
-	ID3D11VertexShader *VertShader = nullptr;
-	ID3D11PixelShader *PixelShader = nullptr;
-	ID3D11VertexShader *SkyboxVShader = nullptr;
-	ID3D11PixelShader *SkyboxPShader = nullptr;
+	ID3D11VertexShader *VertShader		= nullptr;
+	ID3D11PixelShader *PixelShader		= nullptr;
+	ID3D11VertexShader *SkyboxVShader	= nullptr;
+	ID3D11PixelShader *SkyboxPShader	= nullptr;
+	ID3D11PixelShader *LightingPS		= nullptr;
 
 	// Star Buffers
-	ID3D11Buffer *StarVbuffer = nullptr;
-	ID3D11Buffer *StarCbuffer = nullptr;
-	ID3D11Buffer *StarIndexbuff;
+	ID3D11Buffer *StarVbuffer			= nullptr;
+	ID3D11Buffer *StarCbuffer			= nullptr;
+	ID3D11Buffer *StarIndexbuff			= nullptr;
 
 	// Ground Buffers
-	ID3D11Buffer *GroundVbuff = nullptr;
-	ID3D11Buffer *GroundCbuff = nullptr;
-	ID3D11Buffer *GndIndexbuff;
+	ID3D11Buffer *GroundVbuff			= nullptr;
+	ID3D11Buffer *GroundCbuff			= nullptr;
+	ID3D11Buffer *GndIndexbuff			= nullptr;
+	ID3D11ShaderResourceView *GroundSRV = nullptr;
 
 	// Scene buffer
 	ID3D11Buffer *SceneCbuffer;
@@ -138,6 +139,11 @@ public:
 	void SetConstBuffer(ID3D11Buffer **constbuff, Type size);
 	// Sets Swapchain & Creates Viewport
 	void SetSwapChain();
+	// Lighting
+	void InitializeLights();
+	void ToggleLights();
+	void MovePointLight();
+
 	// Draw
 	void Draw(Object *obj, ID3D11Buffer **vertbuff, ID3D11Buffer *indexbuff, ID3D11Buffer *constbuff, unsigned int numindices);
 };
