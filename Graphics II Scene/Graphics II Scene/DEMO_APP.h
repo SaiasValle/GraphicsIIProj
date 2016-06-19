@@ -86,7 +86,10 @@ public:
 	Scene scene;
 	Object star;
 	Object ground;
+	// Models
+	Model moon;
 	Model vette;
+	Model koenigsegg;
 
 	// Shaders
 	ID3D11VertexShader *VertShader		= nullptr;
@@ -142,7 +145,7 @@ public:
 	// Lighting
 	void InitializeLights();
 	void ToggleLights();
-	void MovePointLight();
+	void MoveLights();
 
 	// Draw
 	void Draw(Object *obj, ID3D11Buffer **vertbuff, ID3D11Buffer *indexbuff, ID3D11Buffer *constbuff, unsigned int numindices);

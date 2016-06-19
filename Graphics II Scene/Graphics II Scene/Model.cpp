@@ -54,7 +54,7 @@ void Model::LoadTextureMTL(string textureName, ID3D11Device *device)
 {
 
 }
-void Model::LoadFromFile(ID3D11Device *device)
+void Model::LoadFromFile(char *filename, ID3D11Device *device)
 {
 	vector<XMFLOAT4> position;
 	vector<XMFLOAT2> uv;
@@ -66,7 +66,7 @@ void Model::LoadFromFile(ID3D11Device *device)
 	char buffer[256] = { 0 };
 	FILE *file;
 
-	fopen_s(&file, fileName.c_str(), "r");
+	fopen_s(&file, filename, "r");
 
 	if (file != nullptr)
 	{

@@ -13,10 +13,13 @@
 //************ INCLUDES & DEFINES ****************************
 //************************************************************
 #include "DEMO_APP.h"
+#include <thread>
+#include <mutex>
 
 //************************************************************
 //************ CREATION OF OBJECTS & RESOURCES ***************
 //************************************************************
+float trans = 0.0f;
 
 DEMO_APP::DEMO_APP(HINSTANCE hinst, WNDPROC proc)
 {
@@ -53,13 +56,26 @@ DEMO_APP::DEMO_APP(HINSTANCE hinst, WNDPROC proc)
 	CreateGround();
 	CreateSkybox();
 	// Models
-	vette.SetFileName("corvette.obj");
-	vette.LoadFromFile(device);
-	vette.LoadTextureDDS(L"vette.dds", device);
-	vette.RotateModel(XMFLOAT3(0.0f, 180.0f, 0.0f));
-	vette.TranslateModel(XMFLOAT3(-10.0f, -1.1f, 10.0f));
+	moon.LoadFromFile("moon1.obj", device);
+	moon.ScaleModel(XMFLOAT3(0.24f, 0.24f, 0.24f));
 
-	//vette.ScaleModel(XMFLOAT3(0.5f, 0.5f, 0.5f));
+	vette.LoadFromFile("corvette.obj", device);
+	vette.RotateModel(XMFLOAT3(0.0f, -2.6f, 0.0f));
+	vette.ScaleModel(XMFLOAT3(0.48f, 0.48f, 0.48f));
+	vette.TranslateModel(XMFLOAT3(-10.5f, -2.0f, 11.0f));
+
+	koenigsegg.LoadFromFile("koenigsegg.obj", device);
+	koenigsegg.RotateModel(XMFLOAT3(0.0f, -0.9f, 0.0f));
+	koenigsegg.TranslateModel(XMFLOAT3(-2.0f, -1.8f, 10.0f));
+
+	// Multi-threading
+	thread thread1, thread2, thread3;
+	thread1 = thread(CreateDDSTextureFromFile, device, L"vette.dds", nullptr, vette.GetSRV(),0);
+	thread2 = thread(CreateDDSTextureFromFile, device, L"MoonMap.dds", nullptr, moon.GetSRV(), 0);
+	thread3 = thread(CreateDDSTextureFromFile, device, L"carbonfiber.dds", nullptr, koenigsegg.GetSRV(), 0);
+	thread1.join();
+	thread2.join();
+	thread3.join();
 
 	// Set Buffers (Zbuffer, Constant, etc.)
 	Initialize();
@@ -202,7 +218,7 @@ bool DEMO_APP::Run()
 	devContext->PSSetConstantBuffers(3, 1, &SlightCbuff);
 
 	ToggleLights();
-	MovePointLight();
+	MoveLights();
 #endif
 	devContext->PSSetShader(PixelShader, nullptr, 0);
 	// Object (Star)
@@ -221,8 +237,8 @@ bool DEMO_APP::Run()
 #endif
 	// Object (Ground)
 #if 1
-	// Texture
 	devContext->PSSetShader(LightingPS, nullptr, 0);
+	// Texture
 	devContext->PSSetShaderResources(0, 1, &GroundSRV);
 
 	size = sizeof(Object);
@@ -239,6 +255,9 @@ bool DEMO_APP::Run()
 #endif
 	// Models
 	vette.Draw(devContext);
+	koenigsegg.Draw(devContext);
+	if (Plight.color.w > 0.0f)
+		moon.Draw(devContext);
 
 	swapchain->Present(0, 0);
 
@@ -768,7 +787,9 @@ void DEMO_APP::ToggleLights()
 	if (GetAsyncKeyState('1') & 0x1)
 	{
 		if (Plight.color.x <= 0.0f)
+		{
 			Plight.color = XMFLOAT4(0.6f, 0.6f, 1.0f, 1.0f);
+		}
 		else if (Plight.color.x >= 0.1f)
 			Plight.color = XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f);
 	}
@@ -789,29 +810,31 @@ void DEMO_APP::ToggleLights()
 			Slight.color = XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f);
 	}
 }
-void DEMO_APP::MovePointLight()
+void DEMO_APP::MoveLights()
 {
-	if (GetAsyncKeyState('I') & 0x1)
+	// Point Light
+#if 1
+	if (GetAsyncKeyState('I'))
 	{
-		Plight.position.z += 0.7f;
+		Plight.position.z += 0.02f;
 	}
-	if (GetAsyncKeyState('K') & 0x1)
+	if (GetAsyncKeyState('K'))
 	{
-		Plight.position.z += -0.7f;
+		Plight.position.z += -0.02f;
 	}
-	if (GetAsyncKeyState('J') & 0x1)
+	if (GetAsyncKeyState('J'))
 	{
-		Plight.position.x += -0.7f;
+		Plight.position.x += -0.02f;
 	}
-	if (GetAsyncKeyState('L') & 0x1)
+	if (GetAsyncKeyState('L'))
 	{
-		Plight.position.x += 0.7f;
+		Plight.position.x += 0.02f;
 	}
-	if (GetAsyncKeyState('I') && GetAsyncKeyState(VK_SHIFT))
+	if (GetAsyncKeyState('U'))
 	{
 		Plight.position.y += 0.02f;
 	}
-	if (GetAsyncKeyState('K') && GetAsyncKeyState(VK_SHIFT))
+	if (GetAsyncKeyState('O'))
 	{
 		Plight.position.y -= 0.02f;
 	}
@@ -819,6 +842,36 @@ void DEMO_APP::MovePointLight()
 	{
 		Plight.position = XMFLOAT4(0.0f, -1.0f, 0.0f, 0.0f);
 	}
+	moon.GetWorldMatrix()->_41 = Plight.position.x;
+	moon.GetWorldMatrix()->_42 = Plight.position.y;
+	moon.GetWorldMatrix()->_43 = Plight.position.z;
+#endif
+	// Directional Light
+#if 1
+	trans += 0.0002f;
+	if (trans > 2.0f)
+	{
+		trans = -1.9f;
+	}
+	else if (trans < -2.0f)
+	{
+		trans = 1.0f;
+	}
+	Dlight.direction = XMFLOAT4(trans, -1.0f, 0.0f, 0.0f);
+#endif
+	// Spot Light
+#if 1
+	XMFLOAT4X4 camin;
+	XMStoreFloat4x4(&camin, XMMatrixInverse(0, XMLoadFloat4x4(&camera.GetCameraMat())));
+
+	Slight.position.x = camin._41;
+	Slight.position.y = camin._42;
+	Slight.position.z = camin._43;
+
+	Slight.direction.x = camin._31;
+	Slight.direction.y = camin._32;
+	Slight.direction.z = camin._33;
+#endif
 }
 void DEMO_APP::Draw(Object *obj, ID3D11Buffer **vertbuff, ID3D11Buffer *indexbuff, ID3D11Buffer *constbuff, unsigned int numindices)
 {
