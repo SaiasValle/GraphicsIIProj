@@ -51,6 +51,17 @@ DEMO_APP::DEMO_APP(HINSTANCE hinst, WNDPROC proc)
 	
 	// ViewPort & SwapChain
 	SetSwapChain();
+	// Setting Dimensions of the view
+	ZeroMemory(viewport, sizeof(D3D11_VIEWPORT) * 2);
+	viewport[0].TopLeftX = 0;
+	viewport[0].TopLeftY = 0;
+	viewport[0].Width = BACKBUFFER_WIDTH;
+	viewport[0].Height = BACKBUFFER_HEIGHT;
+	viewport[0].MinDepth = 0;
+	viewport[0].MaxDepth = 1;
+	// Set Buffers (Zbuffer, Constant, etc.)
+	Initialize();
+	InitializeLights();
 	// Creating Star, Ground, Skybox
 	CreateStar();
 	CreateGround();
@@ -58,7 +69,7 @@ DEMO_APP::DEMO_APP(HINSTANCE hinst, WNDPROC proc)
 	// Models
 	moon.LoadFromFile("moon1.obj", device);
 	moon.ScaleModel(XMFLOAT3(0.24f, 0.24f, 0.24f));
-
+	
 	vette.LoadFromFile("corvette.obj", device);
 	vette.RotateModel(XMFLOAT3(0.0f, -2.6f, 0.0f));
 	vette.ScaleModel(XMFLOAT3(0.48f, 0.48f, 0.48f));
@@ -69,17 +80,17 @@ DEMO_APP::DEMO_APP(HINSTANCE hinst, WNDPROC proc)
 	koenigsegg.TranslateModel(XMFLOAT3(-2.0f, -1.8f, 10.0f));
 
 	// Multi-threading
-	thread thread1, thread2, thread3;
-	thread1 = thread(CreateDDSTextureFromFile, device, L"vette.dds", nullptr, vette.GetSRV(),0);
-	thread2 = thread(CreateDDSTextureFromFile, device, L"MoonMap.dds", nullptr, moon.GetSRV(), 0);
-	thread3 = thread(CreateDDSTextureFromFile, device, L"carbonfiber.dds", nullptr, koenigsegg.GetSRV(), 0);
-	thread1.join();
-	thread2.join();
-	thread3.join();
-
-	// Set Buffers (Zbuffer, Constant, etc.)
-	Initialize();
-	InitializeLights();
+	// Textures
+	thread threads[5];
+	threads[0] = thread(CreateDDSTextureFromFile, device, L"vette.dds", nullptr, vette.GetSRV(),0);
+	threads[1] = thread(CreateDDSTextureFromFile, device, L"MoonMap.dds", nullptr, moon.GetSRV(), 0);
+	threads[2] = thread(CreateDDSTextureFromFile, device, L"carbonfiber.dds", nullptr, koenigsegg.GetSRV(), 0);
+	threads[3] = thread(CreateDDSTextureFromFile, device, L"City.dds", nullptr, &SkySRV, 0);
+	threads[4] = thread(CreateDDSTextureFromFile, device, L"ground.dds", nullptr, &GroundSRV, 0);
+	for (unsigned int i = 0; i < 5; i++)
+	{
+		threads[i].join();
+	}
 
 	// Standard Vertex Layout
 	D3D11_INPUT_ELEMENT_DESC vertLayout[]
@@ -110,14 +121,15 @@ DEMO_APP::DEMO_APP(HINSTANCE hinst, WNDPROC proc)
 	CHECK(device->CreateInputLayout(vertLayout, ARRAYSIZE(vertLayout), Trivial_VS, sizeof(Trivial_VS), &input));
 	CHECK(device->CreateInputLayout(SkyboxVLayout, ARRAYSIZE(SkyboxVLayout), Skybox_VS, sizeof(Skybox_VS), &Skyboxinput));
 
-	// Textures
-	CHECK(CreateDDSTextureFromFile(device, L"City.dds", nullptr, &SkySRV));
-	CHECK(CreateDDSTextureFromFile(device, L"ground.dds", nullptr, &GroundSRV));
 
 	// Set Projection Matrix
-	SetProjectionMatrix();
-	XMStoreFloat4x4(&scene.ViewMatrix, XMMatrixIdentity());
-	XMStoreFloat4x4(&scene.ViewMatrix, XMMatrixTranslation(0.0f, 0.0f, 5.0f));
+	SetProjectionMatrix(scenes[0]);
+	XMStoreFloat4x4(&scenes[0].ViewMatrix, XMMatrixIdentity());
+	XMStoreFloat4x4(&scenes[0].ViewMatrix, XMMatrixTranslation(0.0f, 0.0f, 5.0f));
+
+	XMStoreFloat4x4(&scenes[1].ViewMatrix, XMMatrixIdentity());
+	XMStoreFloat4x4(&scenes[1].ViewMatrix, XMMatrixTranslation(0.0f, 0.0f, 5.0f));
+	SetProjectionMatrix(scenes[1]);
 }
 
 //************************************************************
@@ -129,135 +141,275 @@ bool DEMO_APP::Run()
 	// Set Star Matrix	
 	SetStarMat((float)clock.TotalTime());
 
-	// Camera Movement
-	camera.SetCameraMat(scene.ViewMatrix);
-	camera.MoveCamera();
-	camera.RotateCamera();
-	scene.ViewMatrix = camera.GetCameraMat();
-
-	// TODO: PART 1 STEP 7a
+	// Render View
 	devContext->OMSetRenderTargets(1, &RTV, DSV);
-
-	// TODO: PART 1 STEP 7b
-	devContext->RSSetViewports(1, &viewport);
-	
-	// TODO: PART 1 STEP 7c
 	float color[4] = { 0.4f, 0.1f, 0.1f, 1.0f };
 	devContext->ClearDepthStencilView(DSV, D3D11_CLEAR_DEPTH, 1, 0);
 	devContext->ClearRenderTargetView(RTV, color);
 
-	devContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	
-	// Constant
-	unsigned int size;
-	unsigned int offset = 0;
-	D3D11_MAPPED_SUBRESOURCE map;
-
-	// Scene
-	size = sizeof(Scene);
-	devContext->Map(SceneCbuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &map);
-	memcpy(map.pData, &scene, size);
-	devContext->Unmap(SceneCbuffer, 0);
-	devContext->VSSetConstantBuffers(1, 1, &SceneCbuffer);
-
-	// Skybox
+	SetViewPorts();
+	// 1 Viewport
 #if 1
-	// Shaders
-	devContext->VSSetShader(SkyboxVShader, nullptr, 0);
-	devContext->PSSetShader(SkyboxPShader, nullptr, 0);
-	// Input Layout
-	devContext->IASetInputLayout(Skyboxinput);
-	// Texture
-	devContext->PSSetShaderResources(0, 1, &SkySRV);
 
-	XMMATRIX caminverse = XMMatrixInverse(0, XMLoadFloat4x4(&camera.GetCameraMat()));
+	if (!splitscreen)
+	{
+		camera.SetCameraMat(scenes[0].ViewMatrix);
+		camera.MoveCamera();
+		camera.RotateCamera();
+		scenes[0].ViewMatrix = camera.GetCameraMat();
 
-	Skybox.WorldMatrix._41 = caminverse.r[3].m128_f32[0];
-	Skybox.WorldMatrix._42 = caminverse.r[3].m128_f32[1];
-	Skybox.WorldMatrix._43 = caminverse.r[3].m128_f32[2];
+		// Viewports
+		devContext->RSSetViewports(1, &viewport[0]);
 
-	size = sizeof(Object);
-	devContext->Map(SkyCbuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &map);
-	memcpy(map.pData, &Skybox, size);
-	devContext->Unmap(SkyCbuffer, 0);
-	devContext->VSSetConstantBuffers(0, 1, &SkyCbuffer);
-	// Skybox Bindings
-	size = sizeof(SIMPLE_VERTEX);
-	devContext->IASetVertexBuffers(0, 1, &SkyVbuffer, &size, &offset);
-	devContext->IASetIndexBuffer(SkyIbuffer, DXGI_FORMAT_R32_UINT, 0);
-	// Draw Skybox
-	devContext->RSSetState(RastStatetoggled);
-	devContext->DrawIndexed(36, 0, 0);
-	devContext->RSSetState(RastState);
-	devContext->ClearDepthStencilView(DSV, D3D11_CLEAR_DEPTH, 1, 0);
-#endif
-	// Standard Shaders
-	devContext->VSSetShader(VertShader, nullptr, 0);
-	devContext->PSSetShader(LightingPS, nullptr, 0);
-	// Standard Input Layout
-	devContext->IASetInputLayout(input);
-	// Lighting
+		// Topology
+		devContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+		// Constant
+		unsigned int size;
+		unsigned int offset = 0;
+		D3D11_MAPPED_SUBRESOURCE map;
+
+		// Scene
+		size = sizeof(Scene);
+		devContext->Map(SceneCbuffer[0], 0, D3D11_MAP_WRITE_DISCARD, 0, &map);
+		memcpy(map.pData, &scenes[0], size);
+		devContext->Unmap(SceneCbuffer[0], 0);
+		devContext->VSSetConstantBuffers(1, 1, &SceneCbuffer[0]);
+
+		// Skybox
 #if 1
-	// Point Light Constant Buffer
-	size = sizeof(PointLight);
-	devContext->Map(PlightCbuff, 0, D3D11_MAP_WRITE_DISCARD, 0, &map);
-	memcpy(map.pData, &Plight, size);
-	devContext->Unmap(PlightCbuff, 0);
-	devContext->PSSetConstantBuffers(1, 1, &PlightCbuff);
-	// Direction Light Constant Buffer
-	size = sizeof(DirectionalLight);
-	devContext->Map(DlightCbuff, 0, D3D11_MAP_WRITE_DISCARD, 0, &map);
-	memcpy(map.pData, &Dlight, size);
-	devContext->Unmap(DlightCbuff, 0);
-	devContext->PSSetConstantBuffers(2, 1, &DlightCbuff);
-	// Spot Light Constant Buffer
-	size = sizeof(SpotLight);
-	devContext->Map(SlightCbuff, 0, D3D11_MAP_WRITE_DISCARD, 0, &map);
-	memcpy(map.pData, &Slight, size);
-	devContext->Unmap(SlightCbuff, 0);
-	devContext->PSSetConstantBuffers(3, 1, &SlightCbuff);
+		// Shaders
+		devContext->VSSetShader(SkyboxVShader, nullptr, 0);
+		devContext->PSSetShader(SkyboxPShader, nullptr, 0);
+		// Input Layout
+		devContext->IASetInputLayout(Skyboxinput);
+		// Texture
+		devContext->PSSetShaderResources(0, 1, &SkySRV);
 
-	ToggleLights();
-	MoveLights();
-#endif
-	devContext->PSSetShader(PixelShader, nullptr, 0);
-	// Object (Star)
-#if 1
-	size = sizeof(Object);
-	devContext->Map(StarCbuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &map);
-	memcpy(map.pData, &star, size);
-	devContext->Unmap(StarCbuffer, 0);
-	devContext->VSSetConstantBuffers(0, 1, &StarCbuffer);
-	// Star Bindings
-	size = sizeof(SIMPLE_VERTEX);
-	devContext->IASetVertexBuffers(0, 1, &StarVbuffer, &size, &offset);
-	devContext->IASetIndexBuffer(StarIndexbuff, DXGI_FORMAT_R32_UINT, 0);
-	// Draw Star
-	devContext->DrawIndexed(60, 0, 0);
-#endif
-	// Object (Ground)
-#if 1
-	devContext->PSSetShader(LightingPS, nullptr, 0);
-	// Texture
-	devContext->PSSetShaderResources(0, 1, &GroundSRV);
+		XMMATRIX caminverse = XMMatrixInverse(0, XMLoadFloat4x4(&camera.GetCameraMat()));
 
-	size = sizeof(Object);
-	devContext->Map(GroundCbuff, 0, D3D11_MAP_WRITE_DISCARD, 0, &map);
-	memcpy(map.pData, &ground, size);
-	devContext->Unmap(GroundCbuff, 0);
-	devContext->VSSetConstantBuffers(0, 1, &GroundCbuff);
-	// Ground Bindings
-	size = sizeof(SIMPLE_VERTEX);
-	devContext->IASetVertexBuffers(0, 1, &GroundVbuff, &size, &offset);
-	devContext->IASetIndexBuffer(GndIndexbuff, DXGI_FORMAT_R32_UINT, 0);
-	// Draw Ground
-	devContext->DrawIndexed(12, 0, 0);
+		Skybox.WorldMatrix._41 = caminverse.r[3].m128_f32[0];
+		Skybox.WorldMatrix._42 = caminverse.r[3].m128_f32[1];
+		Skybox.WorldMatrix._43 = caminverse.r[3].m128_f32[2];
+
+		size = sizeof(Object);
+		devContext->Map(SkyCbuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &map);
+		memcpy(map.pData, &Skybox, size);
+		devContext->Unmap(SkyCbuffer, 0);
+		devContext->VSSetConstantBuffers(0, 1, &SkyCbuffer);
+		// Skybox Bindings
+		size = sizeof(SIMPLE_VERTEX);
+		devContext->IASetVertexBuffers(0, 1, &SkyVbuffer, &size, &offset);
+		devContext->IASetIndexBuffer(SkyIbuffer, DXGI_FORMAT_R32_UINT, 0);
+		// Draw Skybox
+		devContext->RSSetState(RastStatetoggled);
+		devContext->DrawIndexed(36, 0, 0);
+		devContext->RSSetState(RastState);
+		devContext->ClearDepthStencilView(DSV, D3D11_CLEAR_DEPTH, 1, 0);
 #endif
-	// Models
-	vette.Draw(devContext);
-	koenigsegg.Draw(devContext);
-	if (Plight.color.w > 0.0f)
-		moon.Draw(devContext);
+		// Lighting
+#if 1
+		// Standard Shaders
+		devContext->VSSetShader(VertShader, nullptr, 0);
+		devContext->PSSetShader(LightingPS, nullptr, 0);
+		// Standard Input Layout
+		devContext->IASetInputLayout(input);
+		// Point Light Constant Buffer
+		size = sizeof(PointLight);
+		devContext->Map(PlightCbuff, 0, D3D11_MAP_WRITE_DISCARD, 0, &map);
+		memcpy(map.pData, &Plight, size);
+		devContext->Unmap(PlightCbuff, 0);
+		devContext->PSSetConstantBuffers(1, 1, &PlightCbuff);
+		// Direction Light Constant Buffer
+		size = sizeof(DirectionalLight);
+		devContext->Map(DlightCbuff, 0, D3D11_MAP_WRITE_DISCARD, 0, &map);
+		memcpy(map.pData, &Dlight, size);
+		devContext->Unmap(DlightCbuff, 0);
+		devContext->PSSetConstantBuffers(2, 1, &DlightCbuff);
+		// Spot Light Constant Buffer
+		size = sizeof(SpotLight);
+		devContext->Map(SlightCbuff, 0, D3D11_MAP_WRITE_DISCARD, 0, &map);
+		memcpy(map.pData, &Slight, size);
+		devContext->Unmap(SlightCbuff, 0);
+		devContext->PSSetConstantBuffers(3, 1, &SlightCbuff);
+
+		ToggleLights();
+		MoveLights();
+#endif
+		// Object (Star)
+#if 1
+		devContext->PSSetShader(PixelShader, nullptr, 0);
+
+		size = sizeof(Object);
+		devContext->Map(StarCbuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &map);
+		memcpy(map.pData, &star, size);
+		devContext->Unmap(StarCbuffer, 0);
+		devContext->VSSetConstantBuffers(0, 1, &StarCbuffer);
+		// Star Bindings
+		size = sizeof(SIMPLE_VERTEX);
+		devContext->IASetVertexBuffers(0, 1, &StarVbuffer, &size, &offset);
+		devContext->IASetIndexBuffer(StarIndexbuff, DXGI_FORMAT_R32_UINT, 0);
+		// Draw Star
+		devContext->DrawIndexed(60, 0, 0);
+#endif
+		// Object (Ground)
+#if 1
+		devContext->PSSetShader(LightingPS, nullptr, 0);
+		// Texture
+		devContext->PSSetShaderResources(0, 1, &GroundSRV);
+
+		size = sizeof(Object);
+		devContext->Map(GroundCbuff, 0, D3D11_MAP_WRITE_DISCARD, 0, &map);
+		memcpy(map.pData, &ground, size);
+		devContext->Unmap(GroundCbuff, 0);
+		devContext->VSSetConstantBuffers(0, 1, &GroundCbuff);
+		// Ground Bindings
+		size = sizeof(SIMPLE_VERTEX);
+		devContext->IASetVertexBuffers(0, 1, &GroundVbuff, &size, &offset);
+		devContext->IASetIndexBuffer(GndIndexbuff, DXGI_FORMAT_R32_UINT, 0);
+		// Draw Ground
+		devContext->DrawIndexed(12, 0, 0);
+#endif
+		// Models
+		vette.Draw(devContext);
+		koenigsegg.Draw(devContext);
+
+		if (Plight.color.w > 0.0f)
+			moon.Draw(devContext);
+	}
+#endif
+	// 2 Viewports
+#if 1
+	if (splitscreen)
+	{
+		camera2.SetCameraMat(scenes[1].ViewMatrix);
+		camera2.MoveCamera();
+		camera2.RotateCamera();
+		scenes[1].ViewMatrix = camera.GetCameraMat();
+
+		// Loop Viewports
+		for (UINT i = 0; i < 2; i++)
+		{
+			// Viewports
+			devContext->RSSetViewports(1, &viewport[i]);
+
+			// Topology
+			devContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+			// Constant
+			unsigned int size;
+			unsigned int offset = 0;
+			D3D11_MAPPED_SUBRESOURCE map;
+
+			// Scene
+			size = sizeof(Scene);
+			devContext->Map(SceneCbuffer[i], 0, D3D11_MAP_WRITE_DISCARD, 0, &map);
+			memcpy(map.pData, &scenes[i], size);
+			devContext->Unmap(SceneCbuffer[i], 0);
+			devContext->VSSetConstantBuffers(1, 1, &SceneCbuffer[i]);
+
+			// Skybox
+#if 1
+			// Shaders
+			devContext->VSSetShader(SkyboxVShader, nullptr, 0);
+			devContext->PSSetShader(SkyboxPShader, nullptr, 0);
+			// Input Layout
+			devContext->IASetInputLayout(Skyboxinput);
+			// Texture
+			devContext->PSSetShaderResources(0, 1, &SkySRV);
+
+			XMMATRIX caminverse = XMMatrixInverse(0, XMLoadFloat4x4(&camera.GetCameraMat()));
+
+			Skybox.WorldMatrix._41 = caminverse.r[3].m128_f32[0];
+			Skybox.WorldMatrix._42 = caminverse.r[3].m128_f32[1];
+			Skybox.WorldMatrix._43 = caminverse.r[3].m128_f32[2];
+
+			size = sizeof(Object);
+			devContext->Map(SkyCbuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &map);
+			memcpy(map.pData, &Skybox, size);
+			devContext->Unmap(SkyCbuffer, 0);
+			devContext->VSSetConstantBuffers(0, 1, &SkyCbuffer);
+			// Skybox Bindings
+			size = sizeof(SIMPLE_VERTEX);
+			devContext->IASetVertexBuffers(0, 1, &SkyVbuffer, &size, &offset);
+			devContext->IASetIndexBuffer(SkyIbuffer, DXGI_FORMAT_R32_UINT, 0);
+			// Draw Skybox
+			devContext->RSSetState(RastStatetoggled);
+			devContext->DrawIndexed(36, 0, 0);
+			devContext->RSSetState(RastState);
+			devContext->ClearDepthStencilView(DSV, D3D11_CLEAR_DEPTH, 1, 0);
+#endif
+			// Lighting
+#if 1
+			// Standard Shaders
+			devContext->VSSetShader(VertShader, nullptr, 0);
+			devContext->PSSetShader(LightingPS, nullptr, 0);
+			// Standard Input Layout
+			devContext->IASetInputLayout(input);
+			// Point Light Constant Buffer
+			size = sizeof(PointLight);
+			devContext->Map(PlightCbuff, 0, D3D11_MAP_WRITE_DISCARD, 0, &map);
+			memcpy(map.pData, &Plight, size);
+			devContext->Unmap(PlightCbuff, 0);
+			devContext->PSSetConstantBuffers(1, 1, &PlightCbuff);
+			// Direction Light Constant Buffer
+			size = sizeof(DirectionalLight);
+			devContext->Map(DlightCbuff, 0, D3D11_MAP_WRITE_DISCARD, 0, &map);
+			memcpy(map.pData, &Dlight, size);
+			devContext->Unmap(DlightCbuff, 0);
+			devContext->PSSetConstantBuffers(2, 1, &DlightCbuff);
+			// Spot Light Constant Buffer
+			size = sizeof(SpotLight);
+			devContext->Map(SlightCbuff, 0, D3D11_MAP_WRITE_DISCARD, 0, &map);
+			memcpy(map.pData, &Slight, size);
+			devContext->Unmap(SlightCbuff, 0);
+			devContext->PSSetConstantBuffers(3, 1, &SlightCbuff);
+
+			ToggleLights();
+			MoveLights();
+#endif
+			// Object (Star)
+#if 1
+			devContext->PSSetShader(PixelShader, nullptr, 0);
+
+			size = sizeof(Object);
+			devContext->Map(StarCbuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &map);
+			memcpy(map.pData, &star, size);
+			devContext->Unmap(StarCbuffer, 0);
+			devContext->VSSetConstantBuffers(0, 1, &StarCbuffer);
+			// Star Bindings
+			size = sizeof(SIMPLE_VERTEX);
+			devContext->IASetVertexBuffers(0, 1, &StarVbuffer, &size, &offset);
+			devContext->IASetIndexBuffer(StarIndexbuff, DXGI_FORMAT_R32_UINT, 0);
+			// Draw Star
+			devContext->DrawIndexed(60, 0, 0);
+#endif
+			// Object (Ground)
+#if 1
+			devContext->PSSetShader(LightingPS, nullptr, 0);
+			// Texture
+			devContext->PSSetShaderResources(0, 1, &GroundSRV);
+
+			size = sizeof(Object);
+			devContext->Map(GroundCbuff, 0, D3D11_MAP_WRITE_DISCARD, 0, &map);
+			memcpy(map.pData, &ground, size);
+			devContext->Unmap(GroundCbuff, 0);
+			devContext->VSSetConstantBuffers(0, 1, &GroundCbuff);
+			// Ground Bindings
+			size = sizeof(SIMPLE_VERTEX);
+			devContext->IASetVertexBuffers(0, 1, &GroundVbuff, &size, &offset);
+			devContext->IASetIndexBuffer(GndIndexbuff, DXGI_FORMAT_R32_UINT, 0);
+			// Draw Ground
+			devContext->DrawIndexed(12, 0, 0);
+#endif
+			// Models
+			vette.Draw(devContext);
+			koenigsegg.Draw(devContext);
+			if (Plight.color.w > 0.0f)
+				moon.Draw(devContext);
+		}
+	}
+#endif
 
 	swapchain->Present(0, 0);
 
@@ -290,7 +442,8 @@ bool DEMO_APP::ShutDown()
 	RELEASE(input);
 	RELEASE(swapchain);
 	RELEASE(image);
-	RELEASE(SceneCbuffer);
+	RELEASE(SceneCbuffer[0]);
+	RELEASE(SceneCbuffer[1]);
 	RELEASE(Zbuffer)
 	RELEASE(StarIndexbuff);
 	RELEASE(StarCbuffer);
@@ -356,7 +509,7 @@ LRESULT CALLBACK WndProc( HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam 
 
 void DEMO_APP::SetSwapChain()
 {
-	// TODO: PART 1 STEP 3a
+	// Swapchain
 	ZeroMemory(&swapDesc, sizeof(swapDesc));
 	swapDesc.BufferDesc.Width = BACKBUFFER_WIDTH;
 	swapDesc.BufferDesc.Height = BACKBUFFER_HEIGHT;
@@ -372,38 +525,62 @@ void DEMO_APP::SetSwapChain()
 	swapDesc.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
 	swapDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
 
-	// TODO: PART 1 STEP 3b
 	CHECK(D3D11CreateDeviceAndSwapChain(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, D3D11_CREATE_DEVICE_DEBUG, 0, 0, D3D11_SDK_VERSION, &swapDesc, &swapchain, &device, nullptr, &devContext));
-
-	// TODO: PART 1 STEP 4
+	// Image
 	swapchain->GetBuffer(0, __uuidof(ID3D11Texture2D), (LPVOID*)&image);
 	device->CreateRenderTargetView(image, nullptr, &RTV);
 	image->Release();
-
-	// TODO: PART 1 STEP 5
-	ZeroMemory(&viewport, sizeof(D3D11_VIEWPORT));
-	// Setting Dimensions of the view
-	viewport.TopLeftX = 0;
-	viewport.TopLeftY = 0;
-	viewport.Width = BACKBUFFER_WIDTH;
-	viewport.Height = BACKBUFFER_HEIGHT;
-	viewport.MinDepth = 0;
-	viewport.MaxDepth = 1;
 }
-void DEMO_APP::SetProjectionMatrix()
+void DEMO_APP::SetViewPorts()
+{
+	// Setting Dimensions of the view
+	if (GetAsyncKeyState(VK_PRIOR) & 0x1)
+	{
+		ZeroMemory(viewport, sizeof(D3D11_VIEWPORT) * 2);
+		viewport[0].TopLeftX = 0;
+		viewport[0].TopLeftY = 0;
+		viewport[0].Width = BACKBUFFER_WIDTH * 0.5;
+		viewport[0].Height = BACKBUFFER_HEIGHT;
+		viewport[0].MinDepth = 0;
+		viewport[0].MaxDepth = 1;
+
+		viewport[1].TopLeftX = BACKBUFFER_WIDTH * 0.5;
+		viewport[1].TopLeftY = 0;
+		viewport[1].Width = BACKBUFFER_WIDTH * 0.5;
+		viewport[1].Height = BACKBUFFER_HEIGHT;
+		viewport[1].MinDepth = 0;
+		viewport[1].MaxDepth = 1;
+
+		splitscreen = true;
+	}
+	// Toggled
+	if (GetAsyncKeyState(VK_NEXT) & 0x1)
+	{
+		ZeroMemory(viewport, sizeof(D3D11_VIEWPORT) * 2);
+		viewport[0].TopLeftX = 0;
+		viewport[0].TopLeftY = 0;
+		viewport[0].Width = BACKBUFFER_WIDTH;
+		viewport[0].Height = BACKBUFFER_HEIGHT;
+		viewport[0].MinDepth = 0;
+		viewport[0].MaxDepth = 1;
+
+		splitscreen = false;
+	}
+}
+void DEMO_APP::SetProjectionMatrix(Scene &wvp)
 {
 	float zNear = 0.1f;
 	float zFar = 100.0f;
 	float Yscale = 1 / (tanf((65 >> 1) * (3.1415f / 180.0f)));
 	float Xscale = Yscale * 1;
 
-	XMStoreFloat4x4(&scene.ProjectMatrix, XMMatrixIdentity());
-	scene.ProjectMatrix._11 = Xscale;
-	scene.ProjectMatrix._22 = Yscale;
-	scene.ProjectMatrix._33 = zFar / (zFar - zNear);
-	scene.ProjectMatrix._34 = 1.0f;
-	scene.ProjectMatrix._43 = -(zFar * zNear) / (zFar - zNear);
-	scene.ProjectMatrix._44 = 0.0f;
+	XMStoreFloat4x4(&wvp.ProjectMatrix, XMMatrixIdentity());
+	wvp.ProjectMatrix._11 = Xscale;
+	wvp.ProjectMatrix._22 = Yscale;
+	wvp.ProjectMatrix._33 = zFar / (zFar - zNear);
+	wvp.ProjectMatrix._34 = 1.0f;
+	wvp.ProjectMatrix._43 = -(zFar * zNear) / (zFar - zNear);
+	wvp.ProjectMatrix._44 = 0.0f;
 }
 void DEMO_APP::SetStarMat(float Time)
 {
@@ -743,7 +920,8 @@ void DEMO_APP::Initialize()
 	SetConstBuffer(&GroundCbuff, ground);
 
 	// Scene Constant Buffer (View/Projection)
-	SetConstBuffer(&SceneCbuffer, scene);
+	SetConstBuffer(&SceneCbuffer[0], scenes[0]);
+	SetConstBuffer(&SceneCbuffer[1], scenes[1]);
 	
 	// Lighting Constant Buffer
 	SetConstBuffer(&PlightCbuff, Plight);
@@ -866,7 +1044,7 @@ void DEMO_APP::MoveLights()
 
 	Slight.position.x = camin._41;
 	Slight.position.y = camin._42;
-	Slight.position.z = camin._43;
+	Slight.position.z = camin._43 - 1.6f;
 
 	Slight.direction.x = camin._31;
 	Slight.direction.y = camin._32;

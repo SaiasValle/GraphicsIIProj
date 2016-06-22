@@ -59,8 +59,6 @@ public:
 	IDXGISwapChain *swapchain = nullptr;
 	ID3D11RasterizerState *RastState = nullptr;
 	ID3D11RasterizerState *RastStatetoggled = nullptr;
-	D3D11_VIEWPORT viewport;
-	D3D11_VIEWPORT viewportR;
 	DXGI_SWAP_CHAIN_DESC swapDesc;
 
 	// Lighting
@@ -80,12 +78,22 @@ public:
 	ID3D11Buffer *SkyCbuffer = nullptr;
 	ID3D11Buffer *SkyIbuffer = nullptr;
 
+	// Cameras
+	Camera camera;
+	Camera camera2;
+	
+	// Viewport stuff
+	D3D11_VIEWPORT viewport[2];
+	ID3D11Buffer *SceneCbuffer[2];
+	Scene scenes[2];
+	UINT ViewportIndex;
+	bool splitscreen = false;
+
 	// Other
 	XTime clock;
-	Camera camera;
-	Scene scene;
 	Object star;
 	Object ground;
+
 	// Models
 	Model moon;
 	Model vette;
@@ -109,8 +117,6 @@ public:
 	ID3D11Buffer *GndIndexbuff			= nullptr;
 	ID3D11ShaderResourceView *GroundSRV = nullptr;
 
-	// Scene buffer
-	ID3D11Buffer *SceneCbuffer;
 	// Z buffer
 	ID3D11Texture2D *Zbuffer;
 
@@ -123,10 +129,7 @@ public:
 	bool Run();
 	bool ShutDown();
 	void Resize(int width, int height);
-	void SetProjectionMatrix();
-	// Scene Getters/Mutators
-	ID3D11Buffer* GetSceneCBuffer() { return SceneCbuffer; }
-	Scene GetScene() { return scene; }
+	void SetProjectionMatrix(Scene& wvp);
 	// Star/Ground
 	void SetStarMat(float Time);
 	void CreateStar();
@@ -140,8 +143,10 @@ public:
 	void SetIndexBuffer(ID3D11Buffer **indexbuff, vector<Type> verts);
 	template <typename Type>
 	void SetConstBuffer(ID3D11Buffer **constbuff, Type size);
-	// Sets Swapchain & Creates Viewport
+	// Sets Swapchain 
 	void SetSwapChain();
+	// Creates Viewports
+	void SetViewPorts();
 	// Lighting
 	void InitializeLights();
 	void ToggleLights();
