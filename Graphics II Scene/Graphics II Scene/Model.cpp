@@ -4,6 +4,7 @@
 Model::Model()
 {
 	XMStoreFloat4x4(&ObjModel.WorldMatrix, XMMatrixIdentity());
+	instances = 1;
 }
 
 Model::~Model()
@@ -189,7 +190,15 @@ void Model::Initialize(ID3D11Device *device, ID3D11Buffer **vertbuff, vector<Typ
 	ConstbuffDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
 	ConstbuffDesc.Usage = D3D11_USAGE_DYNAMIC;
 	ConstbuffDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-	ConstbuffDesc.ByteWidth = sizeof(Object);
+
+	if (instances == 1)
+	{
+		ConstbuffDesc.ByteWidth = sizeof(Object);
+	}
+	if (instances > 1)
+	{
+		ConstbuffDesc.ByteWidth = sizeof(Object) * instances;
+	}
 
 	CHECK(device->CreateBuffer(&ConstbuffDesc, nullptr, &Constbuffer));
 }
@@ -198,10 +207,31 @@ void Model::Draw(ID3D11DeviceContext *device)
 	unsigned int size;
 	unsigned int offset = 0;
 	D3D11_MAPPED_SUBRESOURCE map;
-	// Constant Buffer
-	size = sizeof(Object);
 	device->Map(Constbuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &map);
-	memcpy(map.pData, &ObjModel, size);
+	// Constant Buffer
+	if (instances == 1)
+	{
+		size = sizeof(Object);	
+		memcpy(map.pData, &ObjModel, size);
+	}
+	if (instances > 1)
+	{
+		vector<Object> worldMats;
+		Object temp;
+		worldMats.push_back(ObjModel);
+
+		for (UINT i = 1; i < instances; i++)
+		{
+			temp.WorldMatrix = ObjModel.WorldMatrix;
+			temp.WorldMatrix._42 = ObjModel.WorldMatrix._42 + i;
+
+			worldMats.push_back(temp);
+		}
+
+		size = sizeof(Object) * instances;
+		memcpy(map.pData, &worldMats, size);
+	}
+
 	device->Unmap(Constbuffer, 0);
 	device->VSSetConstantBuffers(0, 1, &Constbuffer);
 	// Vertex Buffer
@@ -215,6 +245,9 @@ void Model::Draw(ID3D11DeviceContext *device)
 	{
 		device->PSSetShaderResources(0, 1, &m_SRV);
 	}
-
-	device->DrawIndexed(numIndices, 0, 0);
+	// Draw
+	if (instances == 1)
+		device->DrawIndexed(numIndices, 0, 0);
+	if (instances > 1)
+		device->DrawIndexedInstanced(numIndices, instances, 0, 0, 0);
 }

@@ -9,11 +9,10 @@ private:
 	ID3D11Buffer *Constbuffer		= nullptr;
 	ID3D11Buffer *Vertbuffer		= nullptr;
 	ID3D11Buffer *Indexbuffer		= nullptr;
-	unsigned int numIndices = 0;
+	unsigned int numIndices			= 0;
+	unsigned int instances			= 1;
 	// Texture
-	ID3D11ShaderResourceView *m_SRV = nullptr;;
-
-
+	ID3D11ShaderResourceView *m_SRV = nullptr;
 
 public:
 	Model();
@@ -21,6 +20,7 @@ public:
 
 	XMFLOAT4X4* GetWorldMatrix() { return &ObjModel.WorldMatrix; }
 	void SetWorldMatrix(XMFLOAT4X4 rhs) { ObjModel.WorldMatrix = rhs; }
+	void SetInstances(unsigned int numinst) { instances = numinst; }
 	ID3D11ShaderResourceView** GetSRV() { return &m_SRV; }
 
 	void TranslateModel(XMFLOAT3 posVector);

@@ -98,6 +98,7 @@ public:
 	Model moon;
 	Model vette;
 	Model koenigsegg;
+	Model tires;
 
 	// Shaders
 	ID3D11VertexShader *VertShader		= nullptr;

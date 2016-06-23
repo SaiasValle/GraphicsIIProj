@@ -69,6 +69,9 @@ DEMO_APP::DEMO_APP(HINSTANCE hinst, WNDPROC proc)
 	// Models
 	moon.LoadFromFile("moon1.obj", device);
 	moon.ScaleModel(XMFLOAT3(0.24f, 0.24f, 0.24f));
+
+	tires.LoadFromFile("tire.obj", device);
+	//tires.ScaleModel(XMFLOAT3(0.5f, 0.5f, 0.5f));
 	
 	vette.LoadFromFile("corvette.obj", device);
 	vette.RotateModel(XMFLOAT3(0.0f, -2.6f, 0.0f));
@@ -87,6 +90,8 @@ DEMO_APP::DEMO_APP(HINSTANCE hinst, WNDPROC proc)
 	threads[2] = thread(CreateDDSTextureFromFile, device, L"carbonfiber.dds", nullptr, koenigsegg.GetSRV(), 0);
 	threads[3] = thread(CreateDDSTextureFromFile, device, L"City.dds", nullptr, &SkySRV, 0);
 	threads[4] = thread(CreateDDSTextureFromFile, device, L"ground.dds", nullptr, &GroundSRV, 0);
+	CHECK(CreateDDSTextureFromFile(device, L"tires.dds", nullptr, tires.GetSRV(), 0));
+
 	for (unsigned int i = 0; i < 5; i++)
 	{
 		threads[i].join();
@@ -273,7 +278,7 @@ bool DEMO_APP::Run()
 		// Models
 		vette.Draw(devContext);
 		koenigsegg.Draw(devContext);
-
+		tires.Draw(devContext);
 		if (Plight.color.w > 0.0f)
 			moon.Draw(devContext);
 	}
@@ -282,10 +287,20 @@ bool DEMO_APP::Run()
 #if 1
 	if (splitscreen)
 	{
-		camera2.SetCameraMat(scenes[1].ViewMatrix);
-		camera2.MoveCamera();
-		camera2.RotateCamera();
-		scenes[1].ViewMatrix = camera.GetCameraMat();
+		if (GetAsyncKeyState(VK_RBUTTON))
+		{
+			camera2.SetCameraMat(scenes[1].ViewMatrix);
+			camera2.MoveCamera();
+			camera2.RotateCamera();
+			scenes[1].ViewMatrix = camera2.GetCameraMat();
+		}
+		else if (GetAsyncKeyState(VK_LCONTROL))// && GetAsyncKeyState(VK_RBUTTON))
+		{
+			camera.SetCameraMat(scenes[0].ViewMatrix);
+			camera.MoveCamera();
+			camera.RotateCamera();
+			scenes[0].ViewMatrix = camera.GetCameraMat();
+		}
 
 		// Loop Viewports
 		for (UINT i = 0; i < 2; i++)
@@ -405,6 +420,7 @@ bool DEMO_APP::Run()
 			// Models
 			vette.Draw(devContext);
 			koenigsegg.Draw(devContext);
+			tires.Draw(devContext);
 			if (Plight.color.w > 0.0f)
 				moon.Draw(devContext);
 		}
