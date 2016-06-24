@@ -5,7 +5,7 @@
 class Model
 {
 private:
-	Object ObjModel;
+	vector<Object> ObjModel;
 	ID3D11Buffer *Constbuffer		= nullptr;
 	ID3D11Buffer *Vertbuffer		= nullptr;
 	ID3D11Buffer *Indexbuffer		= nullptr;
@@ -18,9 +18,10 @@ public:
 	Model();
 	~Model();
 
-	XMFLOAT4X4* GetWorldMatrix() { return &ObjModel.WorldMatrix; }
-	void SetWorldMatrix(XMFLOAT4X4 rhs) { ObjModel.WorldMatrix = rhs; }
+	XMFLOAT4X4* GetWorldMatrix() { return &ObjModel[0].WorldMatrix; }
+	void SetWorldMatrix(XMFLOAT4X4 rhs) { ObjModel[0].WorldMatrix = rhs; }
 	void SetInstances(unsigned int numinst) { instances = numinst; }
+	UINT GetInstances() { return instances; }
 	ID3D11ShaderResourceView** GetSRV() { return &m_SRV; }
 
 	void TranslateModel(XMFLOAT3 posVector);

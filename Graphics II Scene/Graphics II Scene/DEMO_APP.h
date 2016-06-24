@@ -10,6 +10,9 @@
 #include "Skybox_VS.csh"
 #include "Skybox_PS.csh"
 #include "Lights_PS.csh"
+#include "Instance_VS.csh"
+
+#define MSAA_SAMPLES 4
 
 #define RELEASE(point) { if(point) { point->Release(); point = nullptr; } }
 #define CHECK(HR) { assert(HR == S_OK); }
@@ -40,6 +43,7 @@ struct SIMPLE_VERTEX
 	float color[4];
 	float uv[2];
 	float normal[3];
+	float coord[4];
 };
 
 class DEMO_APP
@@ -106,6 +110,7 @@ public:
 	ID3D11VertexShader *SkyboxVShader	= nullptr;
 	ID3D11PixelShader *SkyboxPShader	= nullptr;
 	ID3D11PixelShader *LightingPS		= nullptr;
+	ID3D11VertexShader *InstanceVS		= nullptr;
 
 	// Star Buffers
 	ID3D11Buffer *StarVbuffer			= nullptr;

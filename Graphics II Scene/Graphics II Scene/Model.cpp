@@ -3,10 +3,11 @@
 
 Model::Model()
 {
-	XMStoreFloat4x4(&ObjModel.WorldMatrix, XMMatrixIdentity());
+	Object temp;
+	XMStoreFloat4x4(&temp.WorldMatrix, XMMatrixIdentity());
+	ObjModel.push_back(temp);
 	instances = 1;
 }
-
 Model::~Model()
 {
 	if (Vertbuffer && Indexbuffer && m_SRV)
@@ -21,11 +22,11 @@ Model::~Model()
 void Model::TranslateModel(XMFLOAT3 posVector)
 {
 	XMMATRIX trans = XMMatrixTranslation(posVector.x, posVector.y, posVector.z);
-	XMStoreFloat4x4(&ObjModel.WorldMatrix, XMMatrixMultiply(XMLoadFloat4x4(&ObjModel.WorldMatrix), trans));
+	XMStoreFloat4x4(&ObjModel[0].WorldMatrix, XMMatrixMultiply(XMLoadFloat4x4(&ObjModel[0].WorldMatrix), trans));
 }
 void Model::RotateModel(XMFLOAT3 rotXYZ)
 {
-	XMMATRIX worldmat = XMLoadFloat4x4(&ObjModel.WorldMatrix);
+	XMMATRIX worldmat = XMLoadFloat4x4(&ObjModel[0].WorldMatrix);
 
 	XMMATRIX rotate = XMMatrixRotationX(rotXYZ.x);
 	worldmat = XMMatrixMultiply(worldmat, rotate);
@@ -36,16 +37,16 @@ void Model::RotateModel(XMFLOAT3 rotXYZ)
 	rotate = XMMatrixRotationZ(rotXYZ.z);
 	worldmat = XMMatrixMultiply(worldmat, rotate);
 
-	XMStoreFloat4x4(&ObjModel.WorldMatrix, worldmat);
+	XMStoreFloat4x4(&ObjModel[0].WorldMatrix, worldmat);
 }
 void Model::ScaleModel(XMFLOAT3 scale)
 {
-	XMMATRIX worldmat = XMLoadFloat4x4(&ObjModel.WorldMatrix);
+	XMMATRIX worldmat = XMLoadFloat4x4(&ObjModel[0].WorldMatrix);
 
 	XMMATRIX Scale = XMMatrixScalingFromVector(XMLoadFloat3(&scale));
 	worldmat = XMMatrixMultiply(worldmat, Scale);
 
-	XMStoreFloat4x4(&ObjModel.WorldMatrix, worldmat);
+	XMStoreFloat4x4(&ObjModel[0].WorldMatrix, worldmat);
 }
 void Model::LoadTextureDDS(wchar_t *textureName, ID3D11Device *device)
 {
@@ -162,7 +163,7 @@ void Model::Initialize(ID3D11Device *device, ID3D11Buffer **vertbuff, vector<Typ
 	D3D11_BUFFER_DESC ObjbuffDesc;
 	ZeroMemory(&ObjbuffDesc, sizeof(ObjbuffDesc));
 	ObjbuffDesc.ByteWidth = sizeof(Type) * verts.size();
-	ObjbuffDesc.Usage = D3D11_USAGE_DEFAULT;
+	ObjbuffDesc.Usage = D3D11_USAGE_IMMUTABLE;
 	ObjbuffDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
 	ObjbuffDesc.CPUAccessFlags = D3D11_USAGE_DEFAULT;
 	ObjbuffDesc.StructureByteStride = 0;
@@ -197,6 +198,14 @@ void Model::Initialize(ID3D11Device *device, ID3D11Buffer **vertbuff, vector<Typ
 	}
 	if (instances > 1)
 	{
+		for (UINT i = 1; i <= instances - 1; i++)
+		{
+			ObjModel.push_back(ObjModel[0]);
+		}
+		ObjModel[1].WorldMatrix._42 += 0.5f;
+		ObjModel[2].WorldMatrix._42 += 1.0f;
+		ObjModel[3].WorldMatrix._42 += 1.5f;
+		
 		ConstbuffDesc.ByteWidth = sizeof(Object) * instances;
 	}
 
@@ -207,31 +216,19 @@ void Model::Draw(ID3D11DeviceContext *device)
 	unsigned int size;
 	unsigned int offset = 0;
 	D3D11_MAPPED_SUBRESOURCE map;
-	device->Map(Constbuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &map);
 	// Constant Buffer
+	device->Map(Constbuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &map);
+
 	if (instances == 1)
 	{
 		size = sizeof(Object);	
-		memcpy(map.pData, &ObjModel, size);
 	}
 	if (instances > 1)
 	{
-		vector<Object> worldMats;
-		Object temp;
-		worldMats.push_back(ObjModel);
-
-		for (UINT i = 1; i < instances; i++)
-		{
-			temp.WorldMatrix = ObjModel.WorldMatrix;
-			temp.WorldMatrix._42 = ObjModel.WorldMatrix._42 + i;
-
-			worldMats.push_back(temp);
-		}
-
 		size = sizeof(Object) * instances;
-		memcpy(map.pData, &worldMats, size);
 	}
 
+	memcpy(map.pData, ObjModel.data(), size);
 	device->Unmap(Constbuffer, 0);
 	device->VSSetConstantBuffers(0, 1, &Constbuffer);
 	// Vertex Buffer

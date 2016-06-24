@@ -70,9 +70,10 @@ DEMO_APP::DEMO_APP(HINSTANCE hinst, WNDPROC proc)
 	moon.LoadFromFile("moon1.obj", device);
 	moon.ScaleModel(XMFLOAT3(0.24f, 0.24f, 0.24f));
 
-	tires.LoadFromFile("tire.obj", device);
-	//tires.ScaleModel(XMFLOAT3(0.5f, 0.5f, 0.5f));
-	
+	tires.SetInstances(4);
+	tires.TranslateModel(XMFLOAT3(5.0f, -2.0f, 8.0f));
+	tires.LoadFromFile("wheel.obj", device);
+
 	vette.LoadFromFile("corvette.obj", device);
 	vette.RotateModel(XMFLOAT3(0.0f, -2.6f, 0.0f));
 	vette.ScaleModel(XMFLOAT3(0.48f, 0.48f, 0.48f));
@@ -121,6 +122,8 @@ DEMO_APP::DEMO_APP(HINSTANCE hinst, WNDPROC proc)
 	CHECK(device->CreatePixelShader(Skybox_PS, sizeof(Skybox_PS), nullptr, &SkyboxPShader));
 	// Lighting
 	CHECK(device->CreatePixelShader(Lights_PS, sizeof(Lights_PS), nullptr, &LightingPS));
+	// Instancing
+	CHECK(device->CreateVertexShader(Instance_VS, sizeof(Instance_VS), nullptr, &InstanceVS));
 
 	// Create Input Layouts
 	CHECK(device->CreateInputLayout(vertLayout, ARRAYSIZE(vertLayout), Trivial_VS, sizeof(Trivial_VS), &input));
@@ -158,10 +161,14 @@ bool DEMO_APP::Run()
 
 	if (!splitscreen)
 	{
-		camera.SetCameraMat(scenes[0].ViewMatrix);
+		XMMATRIX temp = XMMatrixInverse(0, XMLoadFloat4x4(&scenes[0].ViewMatrix));
+		XMFLOAT4X4 temp1;
+		XMStoreFloat4x4(&temp1, temp);
+
+		camera.SetCameraMat(temp1);
 		camera.MoveCamera();
 		camera.RotateCamera();
-		scenes[0].ViewMatrix = camera.GetCameraMat();
+		XMStoreFloat4x4(&scenes[0].ViewMatrix, XMMatrixInverse(0, XMLoadFloat4x4(&camera.GetCameraMat())));
 
 		// Viewports
 		devContext->RSSetViewports(1, &viewport[0]);
@@ -191,11 +198,11 @@ bool DEMO_APP::Run()
 		// Texture
 		devContext->PSSetShaderResources(0, 1, &SkySRV);
 
-		XMMATRIX caminverse = XMMatrixInverse(0, XMLoadFloat4x4(&camera.GetCameraMat()));
+		//XMMATRIX caminverse = XMMatrixInverse(0, XMLoadFloat4x4(&camera.GetCameraMat()));
 
-		Skybox.WorldMatrix._41 = caminverse.r[3].m128_f32[0];
-		Skybox.WorldMatrix._42 = caminverse.r[3].m128_f32[1];
-		Skybox.WorldMatrix._43 = caminverse.r[3].m128_f32[2];
+		Skybox.WorldMatrix._41 = camera.GetCameraMat()._41;//caminverse.r[3].m128_f32[0];
+		Skybox.WorldMatrix._42 = camera.GetCameraMat()._42;//caminverse.r[3].m128_f32[1];
+		Skybox.WorldMatrix._43 = camera.GetCameraMat()._43;//caminverse.r[3].m128_f32[2];
 
 		size = sizeof(Object);
 		devContext->Map(SkyCbuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &map);
@@ -278,23 +285,24 @@ bool DEMO_APP::Run()
 		// Models
 		vette.Draw(devContext);
 		koenigsegg.Draw(devContext);
-		tires.Draw(devContext);
 		if (Plight.color.w > 0.0f)
 			moon.Draw(devContext);
+		if (tires.GetInstances() > 1)
+			devContext->VSSetShader(InstanceVS, nullptr, 0);
+		tires.Draw(devContext);
 	}
 #endif
 	// 2 Viewports
 #if 1
 	if (splitscreen)
 	{
-		if (GetAsyncKeyState(VK_RBUTTON))
-		{
-			camera2.SetCameraMat(scenes[1].ViewMatrix);
-			camera2.MoveCamera();
-			camera2.RotateCamera();
-			scenes[1].ViewMatrix = camera2.GetCameraMat();
-		}
-		else if (GetAsyncKeyState(VK_LCONTROL))// && GetAsyncKeyState(VK_RBUTTON))
+
+		camera2.SetCameraMat(scenes[1].ViewMatrix);
+		camera2.MoveCamera();
+		camera2.RotateCamera();
+		scenes[1].ViewMatrix = camera2.GetCameraMat();
+
+		if (GetAsyncKeyState(VK_LBUTTON))// && GetAsyncKeyState(VK_RBUTTON))
 		{
 			camera.SetCameraMat(scenes[0].ViewMatrix);
 			camera.MoveCamera();
@@ -333,11 +341,11 @@ bool DEMO_APP::Run()
 			// Texture
 			devContext->PSSetShaderResources(0, 1, &SkySRV);
 
-			XMMATRIX caminverse = XMMatrixInverse(0, XMLoadFloat4x4(&camera.GetCameraMat()));
+			//XMMATRIX caminverse = XMMatrixInverse(0, XMLoadFloat4x4(&camera.GetCameraMat()));
 
-			Skybox.WorldMatrix._41 = caminverse.r[3].m128_f32[0];
-			Skybox.WorldMatrix._42 = caminverse.r[3].m128_f32[1];
-			Skybox.WorldMatrix._43 = caminverse.r[3].m128_f32[2];
+			Skybox.WorldMatrix._41 = camera.GetCameraMat()._41; //caminverse.r[3].m128_f32[0];
+			Skybox.WorldMatrix._42 = camera.GetCameraMat()._42; //caminverse.r[3].m128_f32[1];
+			Skybox.WorldMatrix._43 = camera.GetCameraMat()._43; //caminverse.r[3].m128_f32[2];
 
 			size = sizeof(Object);
 			devContext->Map(SkyCbuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &map);
@@ -420,9 +428,11 @@ bool DEMO_APP::Run()
 			// Models
 			vette.Draw(devContext);
 			koenigsegg.Draw(devContext);
-			tires.Draw(devContext);
 			if (Plight.color.w > 0.0f)
 				moon.Draw(devContext);
+			if (tires.GetInstances() > 1)
+				devContext->VSSetShader(InstanceVS, nullptr, 0);
+			tires.Draw(devContext);
 		}
 	}
 #endif
@@ -455,6 +465,7 @@ bool DEMO_APP::ShutDown()
 	RELEASE(SkyboxVShader);
 	RELEASE(SkyboxPShader);
 	RELEASE(LightingPS);
+	RELEASE(InstanceVS);
 	RELEASE(input);
 	RELEASE(swapchain);
 	RELEASE(image);
@@ -536,7 +547,7 @@ void DEMO_APP::SetSwapChain()
 	swapDesc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
 	swapDesc.OutputWindow = window;
 	swapDesc.Windowed = true;
-	swapDesc.SampleDesc.Count = 1;
+	swapDesc.SampleDesc.Count = MSAA_SAMPLES;
 	swapDesc.SampleDesc.Quality = 0;
 	swapDesc.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
 	swapDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
@@ -816,53 +827,53 @@ void DEMO_APP::CreateSkybox()
 
 	SIMPLE_VERTEX currvert;
 	// Top Face
-	currvert.x = -24.0f;
-	currvert.y = 24.0f;
-	currvert.z = -24.0f;
+	currvert.x = -44.0f;
+	currvert.y = 44.0f;
+	currvert.z = -44.0f;
 	currvert.w = 1.0f;
 
 	skyboxverts.push_back(currvert);
 
-	currvert.x = -24.0f;
-	currvert.y = 24.0f;
-	currvert.z = 24.0f;
+	currvert.x = -44.0f;
+	currvert.y = 44.0f;
+	currvert.z = 44.0f;
 	currvert.w = 1.0f;
 	skyboxverts.push_back(currvert);
 
-	currvert.x = 24.0f;
-	currvert.y = 24.0f;
-	currvert.z = 24.0f;
+	currvert.x = 44.0f;
+	currvert.y = 44.0f;
+	currvert.z = 44.0f;
 	currvert.w = 1.0f;
 	skyboxverts.push_back(currvert);
 
-	currvert.x = 24.0f;
-	currvert.y = 24.0f;
-	currvert.z = -24.0f;
+	currvert.x = 44.0f;
+	currvert.y = 44.0f;
+	currvert.z = -44.0f;
 	currvert.w = 1.0f;
 	skyboxverts.push_back(currvert);
 
 	// Bottom Face
-	currvert.x = -24.0f;
-	currvert.y = -24.0f;
-	currvert.z = -24.0f;
+	currvert.x = -44.0f;
+	currvert.y = -44.0f;
+	currvert.z = -44.0f;
 	currvert.w = 1.0f;
 	skyboxverts.push_back(currvert);
 
-	currvert.x = -24.0f;
-	currvert.y = -24.0f;
-	currvert.z = 24.0f;
+	currvert.x = -44.0f;
+	currvert.y = -44.0f;
+	currvert.z = 44.0f;
 	currvert.w = 1.0f;
 	skyboxverts.push_back(currvert);
 
-	currvert.x = 24.0f;
-	currvert.y = -24.0f;
-	currvert.z = 24.0f;
+	currvert.x = 44.0f;
+	currvert.y = -44.0f;
+	currvert.z = 44.0f;
 	currvert.w = 1.0f;
 	skyboxverts.push_back(currvert);
 
-	currvert.x = 24.0f;
-	currvert.y = -24.0f;
-	currvert.z = -24.0f;
+	currvert.x = 44.0f;
+	currvert.y = -44.0f;
+	currvert.z = -44.0f;
 	currvert.w = 1.0f;
 	skyboxverts.push_back(currvert);
 
@@ -905,7 +916,7 @@ void DEMO_APP::Initialize()
 	rasterDesc.DepthBiasClamp = 0.0f;
 	rasterDesc.DepthClipEnable = true;
 	rasterDesc.ScissorEnable = false;
-	rasterDesc.MultisampleEnable = false;
+	rasterDesc.MultisampleEnable = true;
 	rasterDesc.AntialiasedLineEnable = false;
 	
 	CHECK(device->CreateRasterizerState(&rasterDesc, &RastState));
@@ -921,7 +932,7 @@ void DEMO_APP::Initialize()
 	rasterDesc.DepthBiasClamp = 0.0f;
 	rasterDesc.DepthClipEnable = true;
 	rasterDesc.ScissorEnable = false;
-	rasterDesc.MultisampleEnable = false;
+	rasterDesc.MultisampleEnable = true;
 	rasterDesc.AntialiasedLineEnable = false;
 	
 	CHECK(device->CreateRasterizerState(&rasterDesc, &RastStatetoggled));
@@ -954,7 +965,7 @@ void DEMO_APP::Initialize()
 	ZbuffDesc.MipLevels = 1;
 	ZbuffDesc.ArraySize = 1;
 	ZbuffDesc.Usage = D3D11_USAGE_DEFAULT;
-	ZbuffDesc.SampleDesc.Count = 1;
+	ZbuffDesc.SampleDesc.Count = MSAA_SAMPLES;
 	ZbuffDesc.SampleDesc.Quality = 0;
 
 	CHECK(device->CreateTexture2D(&ZbuffDesc, 0, &Zbuffer));
@@ -1055,16 +1066,16 @@ void DEMO_APP::MoveLights()
 #endif
 	// Spot Light
 #if 1
-	XMFLOAT4X4 camin;
-	XMStoreFloat4x4(&camin, XMMatrixInverse(0, XMLoadFloat4x4(&camera.GetCameraMat())));
+	//XMFLOAT4X4 camin;
+	//XMStoreFloat4x4(&camin, XMMatrixInverse(0, XMLoadFloat4x4(&camera.GetCameraMat())));
 
-	Slight.position.x = camin._41;
-	Slight.position.y = camin._42;
-	Slight.position.z = camin._43 - 1.6f;
+	Slight.position.x = camera.GetCameraMat()._41;
+	Slight.position.y = camera.GetCameraMat()._42;
+	Slight.position.z = camera.GetCameraMat()._43;
 
-	Slight.direction.x = camin._31;
-	Slight.direction.y = camin._32;
-	Slight.direction.z = camin._33;
+	Slight.direction.x = camera.GetCameraMat()._31;
+	Slight.direction.y = camera.GetCameraMat()._32;
+	Slight.direction.z = camera.GetCameraMat()._33;
 #endif
 }
 void DEMO_APP::Draw(Object *obj, ID3D11Buffer **vertbuff, ID3D11Buffer *indexbuff, ID3D11Buffer *constbuff, unsigned int numindices)

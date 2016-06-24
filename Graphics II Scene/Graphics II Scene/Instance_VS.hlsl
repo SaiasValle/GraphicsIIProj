@@ -33,7 +33,7 @@ OUTPUT_VERTEX main(INPUT_VERTEX fromVertexBuffer, uint index : SV_InstanceID)
 {
 	OUTPUT_VERTEX sendToRasterizer = (OUTPUT_VERTEX)0;
 	float4 position = mul(fromVertexBuffer.coordinate, worldMatrix[index]);
-		sendToRasterizer.worldPos = position;
+	sendToRasterizer.worldPos = position;
 	position = mul(position, viewMatrix);
 	position = mul(position, projectionMatrix);
 
