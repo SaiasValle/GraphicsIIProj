@@ -1053,14 +1053,10 @@ void DEMO_APP::MoveLights()
 #endif
 	// Directional Light
 #if 1
-	trans += 0.0002f;
+	trans += 0.002f;
 	if (trans > 2.0f)
 	{
-		trans = -1.9f;
-	}
-	else if (trans < -2.0f)
-	{
-		trans = 1.0f;
+		trans = -2.0f;
 	}
 	Dlight.direction = XMFLOAT4(trans, -1.0f, 0.0f, 0.0f);
 #endif

@@ -146,7 +146,7 @@ public:
 	template <typename Type>
 	void SetVertBuffer(ID3D11Buffer **vertbuff, vector<Type> verts);
 	template <typename Type>
-	void SetIndexBuffer(ID3D11Buffer **indexbuff, vector<Type> verts);
+	void SetIndexBuffer(ID3D11Buffer **indexbuff, vector<Type> indices);
 	template <typename Type>
 	void SetConstBuffer(ID3D11Buffer **constbuff, Type size);
 	// Sets Swapchain 
